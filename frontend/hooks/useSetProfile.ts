@@ -1,62 +1,160 @@
-import { useState } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useState, useCallback, useEffect } from 'react'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
 import { namehash } from 'viem/ens'
-import { ENS_RESOLVER_ADDRESS, ENS_RESOLVER } from '@/lib/contracts'
-import { formatAllocation } from '@/lib/formatAllocation'
+import { encodeFunctionData } from 'viem'
 import type { ProfileFormData } from '@/types'
+
+const ENS_PUBLIC_RESOLVER_SEPOLIA = '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5'
+const ENS_PUBLIC_RESOLVER_MAINNET = '0xF29100983E058B709F3D539b0c765937B804AC15'
+
+const IS_TESTNET = true
+const ENS_PUBLIC_RESOLVER = IS_TESTNET ? ENS_PUBLIC_RESOLVER_SEPOLIA : ENS_PUBLIC_RESOLVER_MAINNET
+const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1
+
+const RESOLVER_ABI = [
+  {
+    name: 'setText',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'node', type: 'bytes32' },
+      { name: 'key', type: 'string' },
+      { name: 'value', type: 'string' },
+    ],
+    outputs: [],
+  },
+  {
+    name: 'multicall',
+    type: 'function',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'data', type: 'bytes[]' }],
+    outputs: [{ name: 'results', type: 'bytes[]' }],
+  },
+] as const
+
+function formatAllocation(allocations: { token: string; percentage: number }[]): string {
+  return allocations.map(a => `${a.token}:${a.percentage}`).join(',')
+}
+
+function encodeSingleSetText(node: `0x${string}`, key: string, value: string) {
+  return encodeFunctionData({
+    abi: RESOLVER_ABI,
+    functionName: 'setText',
+    args: [node, key, value],
+  })
+}
 
 export function useSetProfile() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isWriting, setIsWriting] = useState(false)
-  const { writeContractAsync } = useWriteContract()
+  const { chain: currentChain } = useAccount()
+  
+  const { 
+    writeContractAsync,
+    data: txHash, 
+    error: writeError,
+    reset: resetWrite,
+    isPending: isWritePending
+  } = useWriteContract()
+  
+  const { 
+    isLoading: isConfirming, 
+    isSuccess,
+    error: receiptError 
+  } = useWaitForTransactionReceipt({ 
+    hash: txHash 
+  })
 
-  const setProfile = async (data: ProfileFormData) => {
+  // Reset state when transaction is confirmed
+  useEffect(() => {
+    if (isSuccess && isWriting) {
+      console.log('Transaction confirmed!')
+      setIsWriting(false)
+      setCurrentStep(0)
+    }
+  }, [isSuccess, isWriting])
+
+  // Handle receipt errors
+  useEffect(() => {
+    if (receiptError && isWriting) {
+      console.error('Receipt error:', receiptError)
+      setIsWriting(false)
+      setCurrentStep(0)
+    }
+  }, [receiptError, isWriting])
+
+  // Log write errors
+  useEffect(() => {
+    if (writeError) {
+      console.error('Write error:', writeError)
+    }
+  }, [writeError])
+
+  const setProfile = useCallback(async (data: ProfileFormData) => {
+    console.log('setProfile called with:', data)
+    console.log('Current wallet chain:', currentChain?.id)
+    console.log('Required chain:', ENS_CHAIN_ID)
+
+    // Check if on correct chain
+    if (currentChain?.id !== ENS_CHAIN_ID) {
+      console.error(`Wrong chain! Please switch to ${IS_TESTNET ? 'Sepolia' : 'Mainnet'}`)
+      throw new Error(`Please switch to ${IS_TESTNET ? 'Sepolia' : 'Mainnet'} network`)
+    }
+
+    resetWrite()
     setIsWriting(true)
-    setCurrentStep(0)
+    setCurrentStep(1)
 
     try {
-      const node = namehash(data.ensName)
+      const node = namehash(data.ensName) as `0x${string}`
+      console.log('Namehash for', data.ensName, ':', node)
       
-      // Format allocation string: "USDC:50,ETH:30,USDT:20"
       const allocString = formatAllocation(data.allocations)
+      console.log('Allocation string:', allocString)
 
       const records = [
-        { key: 'chainrouter.chain', value: data.chain },
-        { key: 'chainrouter.alloc', value: allocString },
-        { key: 'chainrouter.slippage', value: data.slippageTolerance.toString() },
-        { key: 'chainrouter.autoswap', value: data.autoSwapEnabled.toString() },
+        { key: 'ENSRouter.chain', value: data.chain },
+        { key: 'ENSRouter.alloc', value: allocString },
+        { key: 'ENSRouter.slippage', value: data.slippageTolerance.toString() },
+        { key: 'ENSRouter.autoswap', value: data.autoSwapEnabled.toString() },
       ]
 
-      // Write each text record
-      for (let i = 0; i < records.length; i++) {
-        setCurrentStep(i)
-        const { key, value } = records[i]
-        
-        const hash = await writeContractAsync({
-          address: ENS_RESOLVER_ADDRESS,
-          abi: ENS_RESOLVER.abi,
-          functionName: 'setText',
-          args: [node, key, value],
-          chainId: 1, // Ethereum mainnet
-        })
+      const calls = records.map(({ key, value }) =>
+        encodeSingleSetText(node, key, value)
+      )
+      
+      console.log('Encoded calls:', calls)
+      console.log('Resolver address:', ENS_PUBLIC_RESOLVER)
+      console.log('About to call writeContractAsync...')
 
-        // Wait for confirmation (simplified - could use useWaitForTransactionReceipt)
-        await new Promise(resolve => setTimeout(resolve, 3000))
-      }
+      const hash = await writeContractAsync({
+        address: ENS_PUBLIC_RESOLVER,
+        abi: RESOLVER_ABI,
+        functionName: 'multicall',
+        args: [calls],
+        chainId: ENS_CHAIN_ID,
+      })
 
-      setCurrentStep(records.length)
-      setIsWriting(false)
-      return true
+      console.log('Transaction hash received:', hash)
+      
     } catch (error) {
+      console.error('Error in setProfile:', error)
       setIsWriting(false)
+      setCurrentStep(0)
       throw error
     }
-  }
+  }, [writeContractAsync, resetWrite, currentChain])
+
+  const finalIsWriting = isWriting || isWritePending || isConfirming
+  console.log('Hook state - isWriting:', isWriting, 'isWritePending:', isWritePending, 'isConfirming:', isConfirming, 'final:', finalIsWriting)
 
   return {
     setProfile,
     currentStep,
-    totalSteps: 4,
-    isWriting,
+    totalSteps: 1,
+    isWriting: finalIsWriting,
+    isSuccess,
+    error: writeError || receiptError,
+    txHash,
   }
 }

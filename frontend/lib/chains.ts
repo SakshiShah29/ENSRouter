@@ -1,33 +1,45 @@
-import { base, arbitrum, mainnet, baseSepolia } from 'wagmi/chains'
-import { arcTestnet } from './wagmi'
-
-export const SUPPORTED_CHAINS = {
-  arc: arcTestnet,
-    base: base,
-  baseSepolia: baseSepolia,
-  arbitrum: arbitrum,
-  ethereum: mainnet,
-} as const
-
-export const DESTINATION_CHAINS = [
-  { id: 'base', name: 'Base', chainId: 8453 },
-    { id: 'arbitrum', name: 'Arbitrum', chainId: 42161 },
-  { id: 'baseSepolia', name: 'Base  Sepolia', chainId: 84532 },
-  { id: 'ethereum', name: 'Ethereum', chainId: 1 },
-] as const
-
-export const CHAIN_ID_TO_NAME: Record<number, string> = {
-  8453: 'base',
-    42161: 'arbitrum',
-  84532: 'baseSepolia',
-  1: 'ethereum',
-  656476: 'arc',
+export interface Chain {
+  id: string
+  name: string
+  logo?: string
+  isTestnet?: boolean
 }
 
-export function getChainById(chainId: number) {
-  return Object.values(SUPPORTED_CHAINS).find(c => c.id === chainId)
-}
-
-export function getChainByName(name: string) {
-  return SUPPORTED_CHAINS[name as keyof typeof SUPPORTED_CHAINS]
-}
+export const DESTINATION_CHAINS: Chain[] = [
+  {
+    id: 'base-sepolia',
+    name: 'Base Sepolia',
+    logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg', // Placeholder
+    isTestnet: true,
+  },
+  {
+    id: 'sepolia',
+    name: 'Ethereum Sepolia',
+    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
+    isTestnet: true,
+  },
+  {
+    id: 'base',
+    name: 'Base',
+    logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg', // Placeholder
+    isTestnet: false,
+  },
+  {
+    id: 'optimism',
+    name: 'Optimism',
+    logo: 'https://cryptologos.cc/logos/optimism-ethereum-op-logo.svg',
+    isTestnet: false,
+  },
+  {
+    id: 'arbitrum',
+    name: 'Arbitrum',
+    logo: 'https://cryptologos.cc/logos/arbitrum-arb-logo.svg',
+    isTestnet: false,
+  },
+  {
+    id: 'polygon',
+    name: 'Polygon',
+    logo: 'https://cryptologos.cc/logos/polygon-matic-logo.svg',
+    isTestnet: false,
+  },
+]

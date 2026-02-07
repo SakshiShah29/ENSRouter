@@ -1,42 +1,58 @@
-import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Slider } from '@/components/ui/slider'
 import { TokenSelector } from '@/components/TokenSelector'
 import { getAvailableTokens } from '@/lib/tokenList'
+import { X, Plus } from 'lucide-react'
 import type { TokenAllocation } from '@/types'
 
 interface AllocationSlidersProps {
   allocations: TokenAllocation[]
   onChange: (allocations: TokenAllocation[]) => void
   chain: string
+  disabled?: boolean
 }
 
 export function AllocationSliders({ 
   allocations, 
   onChange, 
-  chain 
+  chain,
+  disabled = false
 }: AllocationSlidersProps) {
   const availableTokens = getAvailableTokens(chain)
 
   const handlePercentageChange = (index: number, percentage: number) => {
     const newAllocations = [...allocations]
+    const oldPercentage = newAllocations[index].percentage
     newAllocations[index].percentage = percentage
     
-    // Auto-adjust others to maintain 100% total
-    const others = newAllocations.filter((_, i) => i !== index)
-    const otherTotal = 100 - percentage
-    const otherCount = others.length
+    const diff = percentage - oldPercentage
     
-    if (otherCount > 0) {
-      const perOther = Math.floor(otherTotal / otherCount)
-      let remaining = otherTotal - (perOther * otherCount)
+    if (allocations.length > 1) {
+      // Distribute the difference among other allocations
+      const others = newAllocations.filter((_, i) => i !== index)
+      const totalOthers = others.reduce((sum, a) => sum + a.percentage, 0)
       
       newAllocations.forEach((alloc, i) => {
-        if (i !== index) {
-          alloc.percentage = perOther + (remaining > 0 ? 1 : 0)
-          if (remaining > 0) remaining--
+        if (i !== index && totalOthers > 0) {
+          const ratio = alloc.percentage / totalOthers
+          const adjustment = -diff * ratio
+          alloc.percentage = Math.max(0, Math.round(alloc.percentage + adjustment))
         }
       })
+      
+      // Ensure total is exactly 100
+      const total = newAllocations.reduce((sum, a) => sum + a.percentage, 0)
+      if (total !== 100) {
+        const correction = 100 - total
+        // Apply correction to the largest non-modified allocation
+        const largestOtherIndex = newAllocations
+          .map((a, i) => ({ percentage: a.percentage, index: i }))
+          .filter(item => item.index !== index)
+          .sort((a, b) => b.percentage - a.percentage)[0]?.index
+        
+        if (largestOtherIndex !== undefined) {
+          newAllocations[largestOtherIndex].percentage += correction
+        }
+      }
     }
 
     onChange(newAllocations)
@@ -49,89 +65,127 @@ export function AllocationSliders({
   }
 
   const addAllocation = () => {
-    if (allocations.length >= 4) return // Max 4 tokens
+    if (allocations.length >= 4) return
     
-    const unusedTokens = availableTokens.filter(
-      t => !allocations.find(a => a.token === t.symbol)
-    )
+    const usedTokens = new Set(allocations.map(a => a.token))
+    const unusedToken = availableTokens.find(t => !usedTokens.has(t.symbol))
     
-    if (unusedTokens.length === 0) return
+    if (!unusedToken) return
 
-    const newToken = unusedTokens[0].symbol
-    const newPercentage = 10
+    const newPercentage = 20
+    const reduction = newPercentage / allocations.length
     
     const newAllocations = allocations.map(a => ({
       ...a,
-      percentage: Math.floor(a.percentage * 0.9), // Reduce by 10%
+      percentage: Math.round(a.percentage - reduction),
     }))
     
-    newAllocations.push({ token: newToken, percentage: newPercentage })
+    // Adjust to ensure total is 100
+    const currentTotal = newAllocations.reduce((sum, a) => sum + a.percentage, 0)
+    const finalPercentage = 100 - currentTotal
+    
+    newAllocations.push({ token: unusedToken.symbol, percentage: finalPercentage })
     onChange(newAllocations)
   }
 
   const removeAllocation = (index: number) => {
     if (allocations.length <= 1) return
     
-    const removed = allocations[index].percentage
+    const removed = allocations[index]
     const newAllocations = allocations.filter((_, i) => i !== index)
     
-    // Distribute removed percentage
-    const perRemaining = Math.floor(removed / newAllocations.length)
-    let remainder = removed - (perRemaining * newAllocations.length)
+    // Distribute removed percentage proportionally
+    const totalRemaining = newAllocations.reduce((sum, a) => sum + a.percentage, 0)
     
-    newAllocations.forEach(alloc => {
-      alloc.percentage += perRemaining + (remainder > 0 ? 1 : 0)
-      if (remainder > 0) remainder--
-    })
+    if (totalRemaining > 0) {
+      newAllocations.forEach(alloc => {
+        const ratio = alloc.percentage / totalRemaining
+        alloc.percentage = Math.round(alloc.percentage + (removed.percentage * ratio))
+      })
+    } else {
+      // If all were 0, give it all to the first one
+      newAllocations[0].percentage = 100
+    }
+    
+    // Ensure total is exactly 100
+    const total = newAllocations.reduce((sum, a) => sum + a.percentage, 0)
+    if (total !== 100 && newAllocations.length > 0) {
+      newAllocations[0].percentage += (100 - total)
+    }
     
     onChange(newAllocations)
   }
 
+  const usedTokens = new Set(allocations.map(a => a.token))
+  const canAddMore = allocations.length < 4 && availableTokens.some(t => !usedTokens.has(t.symbol))
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {allocations.map((alloc, index) => (
-        <div key={index} className="space-y-2">
-          <div className="flex items-center justify-between">
+        <div key={index} className="space-y-2 p-3 bg-black/20 rounded-lg border border-white/5">
+          <div className="flex items-center justify-between gap-3">
             <TokenSelector
               value={alloc.token}
               onChange={(token) => handleTokenChange(index, token)}
               availableTokens={availableTokens}
+              disabled={disabled}
             />
-            <span className="font-medium">{alloc.percentage}%</span>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-bold text-white min-w-[60px] text-right">
+                {alloc.percentage}%
+              </span>
+              
+              {allocations.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeAllocation(index)}
+                  disabled={disabled}
+                  className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
           </div>
           
-          <Slider
-            value={[alloc.percentage]}
-            onValueChange={([value]) => handlePercentageChange(index, value)}
-            min={0}
-            max={100}
-            step={1}
-            className="w-full"
-          />
-
-          {allocations.length > 1 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => removeAllocation(index)}
-              className="text-red-600"
-            >
-              Remove
-            </Button>
-          )}
+          <div className="px-1">
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={alloc.percentage}
+              onChange={(e) => handlePercentageChange(index, parseInt(e.target.value))}
+              disabled={disabled}
+              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#c084fc] hover:accent-[#c084fc]/80 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: `linear-gradient(to right, #c084fc 0%, #c084fc ${alloc.percentage}%, rgba(255,255,255,0.1) ${alloc.percentage}%, rgba(255,255,255,0.1) 100%)`
+              }}
+            />
+          </div>
         </div>
       ))}
 
-      {allocations.length < 4 && (
+      {canAddMore && (
         <Button
           type="button"
           variant="outline"
           onClick={addAllocation}
-          className="w-full"
+          disabled={disabled}
+          className="w-full bg-white/5 border-white/10 text-white hover:bg-white/10 hover:text-white"
         >
-          + Add Token
+          <Plus className="w-4 h-4 mr-2" />
+          Add Token
         </Button>
+      )}
+      
+      {!canAddMore && allocations.length < 4 && (
+        <p className="text-xs text-white/30 text-center">
+          All available tokens have been added
+        </p>
       )}
     </div>
   )
