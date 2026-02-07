@@ -1,7 +1,6 @@
 import { Card, CardContent } from '@/components/ui/card'
 import { useAcrossQuote } from '@/hooks/useAccrossQuote'
 import { formatUSDC, formatTokenAmount } from '@/lib/utils'
-import { CHAIN_ID_TO_NAME } from '@/lib/chains'
 import type { ParsedProfile } from '@/types'
 
 interface PaymentPreviewProps {
