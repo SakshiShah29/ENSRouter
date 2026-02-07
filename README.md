@@ -1,0 +1,1 @@
+ENSRouter is a cross-chain payment routing platform that uses ENS text records to store user payment preferences. Users configure their preferred destination chain and token allocation once via ENS, and all future payments automatically route to their preferences using Arc as a liquidity hub, Circle Gateway for bridging, and Across Protocol for gasless intent-based token swaps.
