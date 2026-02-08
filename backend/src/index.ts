@@ -13,7 +13,9 @@ import { NotificationQueue } from './models';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
+// Use Render's PORT or default
+const PORT = parseInt(process.env.PORT || '3000');
 
 // Validate required env vars
 const requiredEnvVars = ['MONGODB_URI', 'TELEGRAM_BOT_TOKEN', 'WEBHOOK_SECRET', 'ETHEREUM_RPC_URL'];
@@ -24,8 +26,7 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// ENS resolution uses Sepolia RPC (same as frontend) so .eth names resolve correctly.
-// Override with ENS_RPC_URL if you use a different ENS chain.
+// ENS resolution uses Sepolia RPC
 const ENS_RPC_URL =
   process.env.ENS_RPC_URL ||
   process.env.SEPOLIA_RPC_URL ||
@@ -39,21 +40,27 @@ const webhookService = new WebhookService(telegramService, process.env.WEBHOOK_S
 // Middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:3001'],
+  origin: process.env.FRONTEND_URL || '*',
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'x-webhook-signature'],
   credentials: true,
 }));
 app.use(express.json());
 
-app.use((req, res, next) => {
-  console.log(`📨 ${req.method} ${req.path}`, {
-    headers: req.headers,
-    body: req.body,
+// Request logging (only in development)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`📨 ${req.method} ${req.path}`);
+    next();
   });
-  next();
+}
+
+// Health check endpoint (Render needs this)
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
-// Routes
+
+// API Routes
 app.use('/api', createRoutes(webhookService, ensService));
 
 // Error handling
@@ -65,29 +72,28 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 // Start server
 const startServer = async () => {
   try {
-    console.log(`Starting server (port ${PORT})...`);
+    console.log(`[${new Date().toISOString()}] Starting server...`);
+    console.log(`Port: ${PORT}`);
+    console.log(`Node env: ${process.env.NODE_ENV || 'development'}`);
 
     // Connect to database
+    console.log('Connecting to MongoDB...');
     await connectDatabase(process.env.MONGODB_URI!);
+    console.log('MongoDB connected');
 
-    // Start HTTP server first so the port is visible even if Telegram hangs
-    app.listen(PORT, () => {
-      console.log('');
-      console.log('--- Server started ---');
-      console.log(`Server is running on port ${PORT}`);
-      console.log(`Local:    http://localhost:${PORT}`);
-      console.log(`Webhook:  http://localhost:${PORT}/api/webhook/bridge-events`);
-      console.log('------------------------');
-      console.log('');
+    // Start HTTP server
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`[${new Date().toISOString()}] Server running on port ${PORT}`);
     });
 
-    // Start Telegram bot (after server is listening)
+    // Start Telegram bot
     console.log('Starting Telegram bot...');
     await telegramService.start();
-    console.log('Telegram bot ready.');
+    console.log('Telegram bot started');
 
-    // Start notification processor (cron-like job)
+    // Start notification processor
     startNotificationProcessor();
+
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);
@@ -116,11 +122,9 @@ const startNotificationProcessor = () => {
 
 // Graceful shutdown
 const gracefulShutdown = async (signal: string) => {
-  console.log(`\n${signal} received. Starting graceful shutdown...`);
-  
+  console.log(`\n${signal} received. Shutting down...`);
   telegramService.stop();
   await disconnectDatabase();
-  
   process.exit(0);
 };
 
