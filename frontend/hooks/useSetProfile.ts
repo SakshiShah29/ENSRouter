@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useSwitchChain } from 'wagmi'
 import { namehash } from 'viem/ens'
 import { encodeFunctionData } from 'viem'
-import type { ProfileFormData, ChainAllocation } from '@/types'
+import type { ProfileFormData, TokenAllocation } from '@/types'
 
 const ENS_PUBLIC_RESOLVER = '0xF29100983E058B709F3D539b0c765937B804AC15'
 const ENS_CHAIN_ID = 1
@@ -28,11 +28,11 @@ const RESOLVER_ABI = [
   },
 ] as const
 
-// Format chain allocations as: "base:80,arbitrum:10,ethereum:10"
-function formatChainAllocations(allocations: ChainAllocation[]): string {
+// Format token allocations as: "USDC:60,ETH:30,DAI:10"
+function formatTokenAllocations(allocations: TokenAllocation[]): string {
   return allocations
     .filter(a => a.percentage > 0)
-    .map(a => `${a.chain}:${a.percentage}`)
+    .map(a => `${a.token}:${a.percentage}`)
     .join(',')
 }
 
@@ -100,9 +100,9 @@ export function useSetProfile() {
     }
 
     // Validate allocations sum to 100
-    const totalPercentage = data.chainAllocations.reduce((sum, a) => sum + a.percentage, 0)
+    const totalPercentage = data.allocations.reduce((sum, a) => sum + a.percentage, 0)
     if (totalPercentage !== 100) {
-      throw new Error(`Chain allocations must sum to 100% (currently ${totalPercentage}%)`)
+      throw new Error(`Token allocations must sum to 100% (currently ${totalPercentage}%)`)
     }
 
     resetWrite()
@@ -113,19 +113,18 @@ export function useSetProfile() {
       const node = namehash(data.ensName) as `0x${string}`
       console.log('Namehash for', data.ensName, ':', node)
 
-      const chainAllocString = formatChainAllocations(data.chainAllocations)
-      console.log('Chain allocation string:', chainAllocString)
+      const tokenAllocString = formatTokenAllocations(data.allocations)
+      console.log('Token allocation string:', tokenAllocString)
 
-      // Store chain allocations as a single text record
-      // Format: "ENSRouter.chainAlloc" = "base:80,arbitrum:10,ethereum:10"
+      // Store profile as ENS text records
+      // ENSRouter.chain = "base"
+      // ENSRouter.tokenAlloc = "USDC:60,ETH:30,DAI:10"
+      // ENSRouter.slippage = "0.5"
       const records: { key: string; value: string }[] = [
-        { key: 'ENSRouter.chainAlloc', value: chainAllocString },
+        { key: 'ENSRouter.chain', value: data.chain },
+        { key: 'ENSRouter.tokenAlloc', value: tokenAllocString },
+        { key: 'ENSRouter.slippage', value: data.slippageTolerance.toString() },
       ]
-
-      // Add fallback chain if specified
-      if (data.fallbackChain) {
-        records.push({ key: 'ENSRouter.fallback', value: data.fallbackChain })
-      }
 
       const calls = records.map(({ key, value }) =>
         encodeSingleSetText(node, key, value)

@@ -12,7 +12,10 @@ interface BridgeParams {
   sourceChain: string          // Our chain key (e.g. "base")
   destChain: string            // Our chain key (e.g. "arbitrum")
   amount: string               // Human-readable USDC amount (e.g. "100.00")
+  destTokenAddress?: string    // Token address on destination chain (defaults to dest chain USDC)
+  destTokenSymbol?: string     // Display name for the destination token (e.g. "ETH")
   recipientAddress?: string    // Recipient wallet address on destination chain
+  slippage?: number            // Slippage tolerance as decimal (e.g. 0.005 = 0.5%). Defaults to 0.005
   onStepUpdate?: (step: BridgeStep, stepIndex: number) => void
 }
 
@@ -63,12 +66,16 @@ export function useBridgeUSDC() {
         throw new Error(errorMsg)
       }
 
+      // Source is always USDC (sender pays in USDC)
       const fromToken = CHAIN_USDC_ADDRESS[params.sourceChain]
-      const toToken = CHAIN_USDC_ADDRESS[params.destChain]
+      // Destination token: use provided address, or default to USDC on dest chain
+      const toToken = params.destTokenAddress || CHAIN_USDC_ADDRESS[params.destChain]
 
       if (!fromToken || !toToken) {
-        throw new Error('USDC address not configured for chain')
+        throw new Error('Token address not configured for chain')
       }
+
+      const destTokenName = params.destTokenSymbol || 'USDC'
 
       setIsPending(true)
       setIsSuccess(false)
@@ -79,13 +86,13 @@ export function useBridgeUSDC() {
       const toastedProcesses = new Set<string>()
 
       try {
-        toast.info('Starting Bridge', {
-          description: `Bridging ${params.amount} USDC from ${params.sourceChain} to ${params.destChain}`,
+        toast.info(`Sending ${destTokenName}`, {
+          description: `${params.amount} USDC → ${destTokenName} on ${params.destChain}`,
         })
 
         const amountWei = parseUnits(params.amount, 6).toString()
 
-        // 1. Get quote from LI.FI
+        // 1. Get quote from LI.FI (USDC on source chain → target token on dest chain)
         const quote = await getQuote({
           fromChain: fromChainId,
           toChain: toChainId,
@@ -94,7 +101,7 @@ export function useBridgeUSDC() {
           fromAmount: amountWei,
           fromAddress: address,
           toAddress: params.recipientAddress ?? address,
-          slippage: 0.005,
+          slippage: params.slippage ?? 0.01,
         })
 
         // 2. Convert quote to route and execute
@@ -167,8 +174,8 @@ export function useBridgeUSDC() {
           setIsSuccess(true)
           setCurrentStep(null)
 
-          toast.success('Bridge Complete!', {
-            description: `${params.amount} USDC bridged successfully`,
+          toast.success('Transfer Complete!', {
+            description: `${params.amount} USDC → ${destTokenName} delivered`,
           })
 
           return {
@@ -185,7 +192,7 @@ export function useBridgeUSDC() {
         setError(bridgeError)
         setCurrentStep(null)
 
-        toast.error('Bridge Failed', {
+        toast.error('Transfer Failed', {
           description: bridgeError.message,
           duration: 10000,
         })

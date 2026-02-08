@@ -5,6 +5,7 @@ import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
 import { formatUnits, parseUnits } from 'viem'
 import { useBridgeUSDC } from './useBridgeUSDC'
 import { CHAIN_ID_TO_KEY, CHAIN_USDC_ADDRESS, USDC_ABI } from '@/lib/contracts'
+import { getTokenAddress } from '@/lib/tokenList'
 import { toast } from 'sonner'
 import type {
   ParsedProfile,
@@ -12,7 +13,7 @@ import type {
   PaymentStatus,
   PaymentStep,
   ChainTransfer,
-  ChainAllocation,
+  TokenAllocation,
   SupportedChain,
   BridgeStep,
 } from '@/types'
@@ -29,34 +30,41 @@ const getExplorerUrl = (chainKey: string, txHash: string): string => {
   return `${explorers[chainKey] || 'https://etherscan.io/tx/'}${txHash}`
 }
 
-// Calculate USDC amount for each chain based on percentage
-function calculateChainAmounts(
+// Calculate USDC amount for each token allocation
+function calculateTokenAmounts(
   totalAmount: string,
-  allocations: ChainAllocation[]
-): { chain: SupportedChain; amount: string; percentage: number }[] {
+  allocations: TokenAllocation[]
+): { token: string; amount: string; percentage: number }[] {
   const total = parseFloat(totalAmount)
   return allocations
     .filter(a => a.percentage > 0)
     .map(alloc => ({
-      chain: alloc.chain,
+      token: alloc.token,
       amount: ((total * alloc.percentage) / 100).toFixed(6),
       percentage: alloc.percentage,
     }))
 }
 
-// Create steps for a bridge transfer (LI.FI manages steps dynamically,
-// but we pre-create expected steps for the UI)
-function createBridgeSteps(destChain: string, amount: string): PaymentStep[] {
+// Create steps for a bridge/swap transfer via LI.FI
+function createBridgeSteps(destChain: string, token: string, amount: string): PaymentStep[] {
   return [
-    { name: 'Approve USDC', status: 'pending', timestamp: Date.now(), description: `Approve ${amount} USDC for bridge`, chain: destChain, amount },
-    { name: 'Bridge Transfer', status: 'pending', timestamp: Date.now(), description: `Bridge USDC to ${destChain}`, chain: destChain, amount },
+    { name: 'Approve USDC', status: 'pending', timestamp: Date.now(), description: `Approve ${amount} USDC`, chain: destChain, amount },
+    { name: `Bridge → ${token}`, status: 'pending', timestamp: Date.now(), description: `Send ${amount} USDC → ${token} on ${destChain}`, chain: destChain, amount },
   ]
 }
 
-// Create step for same-chain transfer
+// Create step for same-chain USDC transfer (no swap needed)
 function createTransferStep(chain: string, amount: string): PaymentStep[] {
   return [
     { name: 'Transfer USDC', status: 'pending', timestamp: Date.now(), description: `Send ${amount} USDC on ${chain}`, chain, amount },
+  ]
+}
+
+// Create steps for same-chain swap via LI.FI (USDC → other token, same chain)
+function createSwapSteps(chain: string, token: string, amount: string): PaymentStep[] {
+  return [
+    { name: 'Approve USDC', status: 'pending', timestamp: Date.now(), description: `Approve ${amount} USDC for swap`, chain, amount },
+    { name: `Swap → ${token}`, status: 'pending', timestamp: Date.now(), description: `Swap ${amount} USDC → ${token} on ${chain}`, chain, amount },
   ]
 }
 
@@ -119,9 +127,15 @@ export function usePayment() {
         throw new Error(`Unsupported source chain: ${senderChain.id}`)
       }
 
-      console.log('=== MULTI-CHAIN PAYMENT START ===')
+      const destChain = recipient.chain
+      // Convert slippage from percentage (e.g. 0.5) to decimal (e.g. 0.005) for LI.FI
+      const slippage = (recipient.slippageTolerance || 1) / 100
+
+      console.log('=== TOKEN ALLOCATION PAYMENT START ===')
       console.log('Source chain:', sourceChainKey)
-      console.log('Recipient allocations:', recipient.chainAllocations)
+      console.log('Dest chain:', destChain)
+      console.log('Token allocations:', recipient.tokenAllocations)
+      console.log('Slippage:', `${recipient.slippageTolerance}% (${slippage})`)
       console.log('Total amount:', amountUSD)
 
       // Check USDC balance
@@ -144,21 +158,35 @@ export function usePayment() {
         throw new Error(`Insufficient balance: ${balanceFormatted} USDC`)
       }
 
-      // Calculate amounts for each destination chain
-      const chainAmounts = calculateChainAmounts(amountUSD, recipient.chainAllocations)
-      console.log('Chain amounts:', chainAmounts)
+      // Calculate amounts for each token allocation
+      const tokenAmounts = calculateTokenAmounts(amountUSD, recipient.tokenAllocations)
+      console.log('Token amounts:', tokenAmounts)
 
-      // Create chain transfers
-      const chainTransfers: ChainTransfer[] = chainAmounts.map(({ chain, amount, percentage }) => {
-        const needsBridge = sourceChainKey !== chain
+      const isSameChain = sourceChainKey === destChain
+
+      // Create transfers — one per token allocation
+      const chainTransfers: ChainTransfer[] = tokenAmounts.map(({ token, amount, percentage }) => {
+        const isUSDC = token.toUpperCase() === 'USDC'
+        let steps: PaymentStep[]
+
+        if (isSameChain && isUSDC) {
+          // Same chain, same token — direct USDC transfer
+          steps = createTransferStep(destChain, amount)
+        } else if (isSameChain && !isUSDC) {
+          // Same chain, different token — swap via LI.FI
+          steps = createSwapSteps(destChain, token, amount)
+        } else {
+          // Cross-chain — bridge (+ optional swap) via LI.FI
+          steps = createBridgeSteps(destChain, token, amount)
+        }
+
         return {
-          chain,
+          chain: destChain as SupportedChain,
+          token,
           amount,
           percentage,
           status: 'pending' as PaymentStatus,
-          steps: needsBridge
-            ? createBridgeSteps(chain, amount)
-            : createTransferStep(chain, amount),
+          steps,
         }
       })
 
@@ -179,119 +207,24 @@ export function usePayment() {
       txRef.current = tx
 
       try {
-        // Process each chain transfer sequentially
+        // Process each token transfer sequentially
         for (let i = 0; i < chainTransfers.length; i++) {
           const transfer = chainTransfers[i]
-          const needsBridge = sourceChainKey !== transfer.chain
+          const isUSDC = transfer.token.toUpperCase() === 'USDC'
+          const canDirectTransfer = isSameChain && isUSDC
 
-          console.log(`Processing transfer ${i + 1}/${chainTransfers.length}: ${transfer.amount} USDC to ${transfer.chain}`)
+          console.log(`Processing transfer ${i + 1}/${chainTransfers.length}: ${transfer.amount} USDC → ${transfer.token} on ${destChain}`)
 
           updateChainTransfer(i, { status: 'processing' })
           updateChainStep(i, 0, { status: 'processing' })
 
-          if (needsBridge) {
-            // Cross-chain bridge transfer
-            toast.info(`Bridging to ${transfer.chain}`, {
+          if (canDirectTransfer) {
+            // Same-chain USDC transfer — direct contract call
+            toast.info(`Sending USDC`, {
               description: `${transfer.amount} USDC (${transfer.percentage}%)`,
             })
 
-            updateTransaction({ status: 'approving' })
-
-            const result = await bridge({
-              sourceChain: sourceChainKey,
-              destChain: transfer.chain,
-              amount: transfer.amount,
-              recipientAddress: recipient.address,
-              onStepUpdate: (bridgeStep: BridgeStep, stepIndex: number) => {
-                // LI.FI reports steps dynamically — update existing or append new steps
-                const currentTx = txRef.current
-                const currentSteps = currentTx?.chainTransfers[i]?.steps || []
-
-                const stepUpdate: Partial<PaymentStep> = {
-                  name: bridgeStep.name,
-                  status: bridgeStep.state === 'success' ? 'completed' :
-                          bridgeStep.state === 'error' ? 'failed' : 'processing',
-                  txHash: bridgeStep.txHash as `0x${string}` | undefined,
-                  explorerUrl: bridgeStep.explorerUrl,
-                  error: bridgeStep.error,
-                  substatus: bridgeStep.substatus,
-                  message: bridgeStep.message,
-                  timestamp: Date.now(),
-                }
-
-                if (stepIndex < currentSteps.length) {
-                  updateChainStep(i, stepIndex, stepUpdate)
-                } else {
-                  // New process from LI.FI — append as a new step
-                  setTransaction(prev => {
-                    if (!prev) return prev
-                    const newTransfers = [...prev.chainTransfers]
-                    const newSteps = [...newTransfers[i].steps, {
-                      name: bridgeStep.name,
-                      status: stepUpdate.status!,
-                      timestamp: Date.now(),
-                      description: bridgeStep.message || `${bridgeStep.name} in progress`,
-                      chain: transfer.chain,
-                      amount: transfer.amount,
-                      txHash: stepUpdate.txHash,
-                      explorerUrl: stepUpdate.explorerUrl,
-                      error: stepUpdate.error,
-                      substatus: bridgeStep.substatus,
-                      message: bridgeStep.message,
-                    } as PaymentStep]
-                    newTransfers[i] = { ...newTransfers[i], steps: newSteps }
-                    const newTx = { ...prev, chainTransfers: newTransfers }
-                    txRef.current = newTx
-                    return newTx
-                  })
-                }
-
-                // Update overall transaction status based on step name
-                const statusMap: Record<string, PaymentStatus> = {
-                  'Approve USDC': 'approving',
-                  'Bridge Transfer': 'bridging',
-                  'Receiving': 'bridging',
-                }
-                const stepStatus = statusMap[bridgeStep.name]
-                if (stepStatus) {
-                  updateTransaction({ status: stepStatus })
-                }
-              },
-            })
-
-            // Update transfer with final result from bridge steps
-            const finalSteps = transfer.steps.map((step, idx) => {
-              const bridgeStep = result.steps[idx]
-              if (bridgeStep) {
-                return {
-                  ...step,
-                  status: bridgeStep.state === 'success' ? 'completed' as const :
-                          bridgeStep.state === 'error' ? 'failed' as const : step.status,
-                  txHash: (bridgeStep.txHash as `0x${string}`) || step.txHash,
-                  explorerUrl: bridgeStep.explorerUrl || step.explorerUrl,
-                  error: bridgeStep.error || step.error,
-                }
-              }
-              return step
-            })
-
-            updateChainTransfer(i, {
-              status: 'completed',
-              steps: finalSteps,
-              bridgeResult: result,
-            })
-
-            toast.success(`Bridge to ${transfer.chain} complete!`, {
-              description: `${transfer.amount} USDC delivered`,
-            })
-
-          } else {
-            // Same-chain transfer
-            toast.info(`Sending on ${transfer.chain}`, {
-              description: `${transfer.amount} USDC (${transfer.percentage}%)`,
-            })
-
-            updateTransaction({ status: 'processing' })
+            updateTransaction({ status: 'sending' })
 
             const amountWei = parseUnits(transfer.amount, 6)
             const txHash = await writeContractAsync({
@@ -321,12 +254,115 @@ export function usePayment() {
               updateChainStep(i, 0, { status: 'completed', timestamp: Date.now() })
               updateChainTransfer(i, { status: 'completed' })
 
-              toast.success(`Transfer on ${transfer.chain} complete!`, {
+              toast.success(`USDC transfer complete!`, {
                 description: `${transfer.amount} USDC sent`,
               })
             } else {
               throw new Error('Transaction reverted')
             }
+          } else {
+            // Use LI.FI for: cross-chain bridge, same-chain swap, or bridge+swap
+            const destTokenAddress = getTokenAddress(transfer.token, destChain)
+            if (!destTokenAddress) {
+              throw new Error(`Token ${transfer.token} not found on ${destChain}`)
+            }
+
+            toast.info(`Sending ${transfer.token}`, {
+              description: `${transfer.amount} USDC → ${transfer.token} (${transfer.percentage}%)`,
+            })
+
+            updateTransaction({ status: isSameChain ? 'processing' : 'approving' })
+
+            const result = await bridge({
+              sourceChain: sourceChainKey,
+              destChain: destChain,
+              amount: transfer.amount,
+              destTokenAddress,
+              destTokenSymbol: transfer.token,
+              recipientAddress: recipient.address,
+              slippage,
+              onStepUpdate: (bridgeStep: BridgeStep, stepIndex: number) => {
+                const currentTx = txRef.current
+                const currentSteps = currentTx?.chainTransfers[i]?.steps || []
+
+                const stepUpdate: Partial<PaymentStep> = {
+                  name: bridgeStep.name,
+                  status: bridgeStep.state === 'success' ? 'completed' :
+                          bridgeStep.state === 'error' ? 'failed' : 'processing',
+                  txHash: bridgeStep.txHash as `0x${string}` | undefined,
+                  explorerUrl: bridgeStep.explorerUrl,
+                  error: bridgeStep.error,
+                  substatus: bridgeStep.substatus,
+                  message: bridgeStep.message,
+                  timestamp: Date.now(),
+                }
+
+                if (stepIndex < currentSteps.length) {
+                  updateChainStep(i, stepIndex, stepUpdate)
+                } else {
+                  // New process from LI.FI — append as a new step
+                  setTransaction(prev => {
+                    if (!prev) return prev
+                    const newTransfers = [...prev.chainTransfers]
+                    const newSteps = [...newTransfers[i].steps, {
+                      name: bridgeStep.name,
+                      status: stepUpdate.status!,
+                      timestamp: Date.now(),
+                      description: bridgeStep.message || `${bridgeStep.name} in progress`,
+                      chain: destChain,
+                      amount: transfer.amount,
+                      txHash: stepUpdate.txHash,
+                      explorerUrl: stepUpdate.explorerUrl,
+                      error: stepUpdate.error,
+                      substatus: bridgeStep.substatus,
+                      message: bridgeStep.message,
+                    } as PaymentStep]
+                    newTransfers[i] = { ...newTransfers[i], steps: newSteps }
+                    const newTx = { ...prev, chainTransfers: newTransfers }
+                    txRef.current = newTx
+                    return newTx
+                  })
+                }
+
+                // Update overall transaction status
+                const statusMap: Record<string, PaymentStatus> = {
+                  'Approve USDC': 'approving',
+                  'Bridge Transfer': 'bridging',
+                  'Swap': 'processing',
+                  'Receiving': 'bridging',
+                }
+                const stepStatus = statusMap[bridgeStep.name]
+                if (stepStatus) {
+                  updateTransaction({ status: stepStatus })
+                }
+              },
+            })
+
+            // Update transfer with final result
+            const finalSteps = transfer.steps.map((step, idx) => {
+              const bridgeStep = result.steps[idx]
+              if (bridgeStep) {
+                return {
+                  ...step,
+                  status: bridgeStep.state === 'success' ? 'completed' as const :
+                          bridgeStep.state === 'error' ? 'failed' as const : step.status,
+                  txHash: (bridgeStep.txHash as `0x${string}`) || step.txHash,
+                  explorerUrl: bridgeStep.explorerUrl || step.explorerUrl,
+                  error: bridgeStep.error || step.error,
+                }
+              }
+              return step
+            })
+
+            updateChainTransfer(i, {
+              status: 'completed',
+              steps: finalSteps,
+              bridgeResult: result,
+            })
+
+            toast.success(`${transfer.token} transfer complete!`, {
+              description: `${transfer.amount} USDC → ${transfer.token} delivered`,
+            })
           }
         }
 

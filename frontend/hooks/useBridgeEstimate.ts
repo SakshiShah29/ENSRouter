@@ -7,9 +7,11 @@ import { CHAIN_KEY_TO_CHAIN_ID } from '@/lib/lifi'
 import type { BridgeEstimate } from '@/types'
 
 interface UseBridgeEstimateParams {
-  sourceChain: string   // Our chain key (e.g. "base")
-  destChain: string     // Our chain key (e.g. "arbitrum")
-  amount: string        // Human-readable USDC amount (e.g. "100.00")
+  sourceChain: string        // Our chain key (e.g. "base")
+  destChain: string          // Our chain key (e.g. "arbitrum")
+  amount: string             // Human-readable USDC amount (e.g. "100.00")
+  destTokenAddress?: string  // Token address on destination chain (defaults to USDC)
+  slippage?: number          // Slippage tolerance as decimal (e.g. 0.005 = 0.5%). Defaults to 0.005
   enabled?: boolean
 }
 
@@ -17,6 +19,8 @@ export function useBridgeEstimate({
   sourceChain,
   destChain,
   amount,
+  destTokenAddress,
+  slippage,
   enabled = true,
 }: UseBridgeEstimateParams) {
   const { address } = useAccount()
@@ -24,10 +28,10 @@ export function useBridgeEstimate({
   const fromChainId = CHAIN_KEY_TO_CHAIN_ID[sourceChain]
   const toChainId = CHAIN_KEY_TO_CHAIN_ID[destChain]
   const fromToken = CHAIN_USDC_ADDRESS[sourceChain]
-  const toToken = CHAIN_USDC_ADDRESS[destChain]
+  const toToken = destTokenAddress || CHAIN_USDC_ADDRESS[destChain]
 
   return useQuery<BridgeEstimate>({
-    queryKey: ['bridge-estimate', sourceChain, destChain, amount],
+    queryKey: ['bridge-estimate', sourceChain, destChain, amount, toToken],
     queryFn: async () => {
       if (!address || !fromToken || !toToken) {
         throw new Error('Missing parameters for estimate')
@@ -43,7 +47,7 @@ export function useBridgeEstimate({
         fromAmount: amountWei,
         fromAddress: address,
         toAddress: address,
-        slippage: 0.005,
+        slippage: slippage ?? 0.01,
       })
 
       const fees = [

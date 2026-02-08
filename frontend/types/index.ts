@@ -1,4 +1,4 @@
-// Supported chains for USDC allocation
+// Supported chains
 export const SUPPORTED_CHAINS = [
   'ethereum',
   'base',
@@ -9,17 +9,18 @@ export const SUPPORTED_CHAINS = [
 
 export type SupportedChain = typeof SUPPORTED_CHAINS[number]
 
-// Chain allocation - how much USDC percentage on which chain
-export interface ChainAllocation {
-  chain: SupportedChain
-  percentage: number // 0-100
+// Token allocation - what percentage of incoming USDC to hold/swap into each token
+export interface TokenAllocation {
+  token: string       // e.g. "USDC", "ETH", "DAI"
+  percentage: number  // 0-100
 }
 
 export interface ParsedProfile {
   ensName: string
   address: `0x${string}`
-  chainAllocations: ChainAllocation[] // e.g., [{chain: 'base', percentage: 80}, {chain: 'arbitrum', percentage: 20}]
-  fallbackChain?: SupportedChain
+  chain: SupportedChain                // Single destination chain
+  tokenAllocations: TokenAllocation[]  // e.g., [{token: 'USDC', percentage: 60}, {token: 'ETH', percentage: 40}]
+  slippageTolerance: number            // e.g. 0.5 (percent)
 }
 
 // Payment status type
@@ -74,17 +75,18 @@ export interface BridgeEstimate {
   estimatedTime: number
 }
 
-// Chain transfer - represents a single transfer to a chain
+// Chain transfer - represents a single token transfer to the destination chain
 export interface ChainTransfer {
   chain: SupportedChain
-  amount: string // USDC amount for this chain
+  token: string     // Destination token symbol (e.g. "ETH", "USDC", "DAI")
+  amount: string    // USDC amount being sent for this allocation
   percentage: number
   status: PaymentStatus
   steps: PaymentStep[]
   bridgeResult?: BridgeResult
 }
 
-// Payment transaction state - now supports multi-chain
+// Payment transaction state
 export interface PaymentTransaction {
   id: string
   sender: `0x${string}`
@@ -93,7 +95,7 @@ export interface PaymentTransaction {
   totalAmountUSDC: string
   sourceChain: string
   status: PaymentStatus
-  chainTransfers: ChainTransfer[] // Multiple chain destinations
+  chainTransfers: ChainTransfer[]
   createdAt: number
   completedAt?: number
 }
@@ -101,8 +103,9 @@ export interface PaymentTransaction {
 // Form types
 export interface ProfileFormData {
   ensName: string
-  chainAllocations: ChainAllocation[]
-  fallbackChain?: SupportedChain
+  chain: SupportedChain
+  allocations: TokenAllocation[]
+  slippageTolerance: number
 }
 
 export interface SendFormData {

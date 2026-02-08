@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useENSAvatar, useENSHeader } from '@/hooks/useENSAvatar'
 import { formatAddress } from '@/lib/utils'
-import type { ParsedProfile, ChainAllocation } from '@/types'
+import type { ParsedProfile, TokenAllocation } from '@/types'
 import { ExternalLink, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 
@@ -21,37 +21,33 @@ const CHAIN_INFO: Record<string, { name: string; color: string; icon: string }> 
   'optimism': { name: 'Optimism', color: 'bg-red-500', icon: '🔴' },
 }
 
-function ChainAllocationBar({ allocations }: { allocations: ChainAllocation[] }) {
+function TokenAllocationBar({ allocations }: { allocations: TokenAllocation[] }) {
+  const COLORS = ['bg-[#c084fc]', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500']
+
   return (
     <div className="space-y-3">
       {/* Visual bar */}
       <div className="flex h-4 w-full overflow-hidden rounded-full">
-        {allocations.map((alloc, idx) => {
-          const info = CHAIN_INFO[alloc.chain] || { color: 'bg-gray-500' }
-          return (
-            <div
-              key={idx}
-              className={`${info.color} transition-all`}
-              style={{ width: `${alloc.percentage}%` }}
-              title={`${alloc.chain}: ${alloc.percentage}%`}
-            />
-          )
-        })}
+        {allocations.map((alloc, idx) => (
+          <div
+            key={idx}
+            className={`${COLORS[idx % COLORS.length]} transition-all`}
+            style={{ width: `${alloc.percentage}%` }}
+            title={`${alloc.token}: ${alloc.percentage}%`}
+          />
+        ))}
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3">
-        {allocations.map((alloc, idx) => {
-          const info = CHAIN_INFO[alloc.chain] || { name: alloc.chain, color: 'bg-gray-500', icon: '●' }
-          return (
-            <div key={idx} className="flex items-center gap-2">
-              <div className={`h-3 w-3 rounded-full ${info.color}`} />
-              <span className="text-sm text-gray-300">
-                {info.name}: <span className="font-medium text-white">{alloc.percentage}%</span>
-              </span>
-            </div>
-          )
-        })}
+        {allocations.map((alloc, idx) => (
+          <div key={idx} className="flex items-center gap-2">
+            <div className={`h-3 w-3 rounded-full ${COLORS[idx % COLORS.length]}`} />
+            <span className="text-sm text-gray-300">
+              {alloc.token}: <span className="font-medium text-white">{alloc.percentage}%</span>
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -71,6 +67,8 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
   if (isLoading) {
     return <ENSProfileCardSkeleton />
   }
+
+  const chainInfo = CHAIN_INFO[profile.chain] || { name: profile.chain, color: 'bg-gray-500', icon: '●' }
 
   return (
     <Card className="overflow-hidden border-0 bg-[#1a1b1f] text-white shadow-2xl">
@@ -119,12 +117,17 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
         {/* ENS Name and Primary Badge */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-white mb-2">{profile.ensName}</h1>
-          <Badge className="bg-green-500/20 text-green-400 border-0 hover:bg-green-500/30">
-            <svg className="mr-1 h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-            Your primary name
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className="bg-green-500/20 text-green-400 border-0 hover:bg-green-500/30">
+              <svg className="mr-1 h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+              </svg>
+              Your primary name
+            </Badge>
+            <Badge className={`${chainInfo.color}/20 text-white border-0`}>
+              {chainInfo.name}
+            </Badge>
+          </div>
         </div>
 
         {/* Address Section */}
@@ -148,33 +151,34 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
           </div>
         </div>
 
-        {/* Chain Allocations Section */}
+        {/* Token Allocations Section */}
         <div className="mb-6">
-          <h2 className="text-sm font-medium text-gray-400 mb-3">USDC Chain Allocations</h2>
+          <h2 className="text-sm font-medium text-gray-400 mb-3">Token Allocation on {chainInfo.name}</h2>
           <div className="rounded-xl bg-[#2d3748]/30 p-4 border border-gray-700/50">
-            <ChainAllocationBar allocations={profile.chainAllocations} />
+            <TokenAllocationBar allocations={profile.tokenAllocations} />
           </div>
         </div>
 
         {/* Router Records Section */}
         <div>
           <h2 className="text-sm font-medium text-gray-400 mb-3">Router Records</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {/* Chain Allocations as text */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="flex flex-col rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-              <span className="text-xs text-gray-500 mb-1">ENSRouter.chainAlloc</span>
+              <span className="text-xs text-gray-500 mb-1">ENSRouter.chain</span>
+              <span className="text-sm font-medium text-blue-400">{profile.chain}</span>
+            </div>
+
+            <div className="flex flex-col rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
+              <span className="text-xs text-gray-500 mb-1">ENSRouter.tokenAlloc</span>
               <span className="text-sm font-medium text-white break-all">
-                {profile.chainAllocations.map(a => `${a.chain}:${a.percentage}`).join(', ')}
+                {profile.tokenAllocations.map(a => `${a.token}:${a.percentage}`).join(', ')}
               </span>
             </div>
 
-            {/* Fallback Chain */}
-            {profile.fallbackChain && (
-              <div className="flex flex-col rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-                <span className="text-xs text-gray-500 mb-1">ENSRouter.fallback</span>
-                <span className="text-sm font-medium text-blue-400">{profile.fallbackChain}</span>
-              </div>
-            )}
+            <div className="flex flex-col rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
+              <span className="text-xs text-gray-500 mb-1">ENSRouter.slippage</span>
+              <span className="text-sm font-medium text-blue-400">{profile.slippageTolerance}%</span>
+            </div>
           </div>
         </div>
 
@@ -232,8 +236,8 @@ export function ENSProfileCardSkeleton() {
         <Skeleton className="h-24 w-full rounded-xl bg-[#2d3748] mb-6" />
 
         <Skeleton className="h-4 w-24 mb-3 bg-[#2d3748]" />
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-          {[...Array(2)].map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          {[...Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-14 rounded-xl bg-[#2d3748]" />
           ))}
         </div>

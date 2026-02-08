@@ -10,11 +10,14 @@ import { useChainRouterProfile } from '@/hooks/useENSRouterProfile'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { ChainSelector } from '@/components/ChainSelector'
+import { AllocationSliders } from '@/components/AllocationSliders'
 import { WalletConnect } from '@/components/WalletConnect'
 import Dither from '@/components/Dither'
 import { ArrowRight, Check, Loader2, Edit2, Info, Copy, Link, QrCode, Download } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { SUPPORTED_CHAINS, type SupportedChain, type ChainAllocation } from '@/types'
+import { SUPPORTED_CHAINS, type SupportedChain } from '@/types'
+import type { ProfileFormData } from '@/types'
 
 // Chain display info
 const CHAIN_INFO: Record<SupportedChain, { name: string; color: string; icon: string }> = {
@@ -25,8 +28,8 @@ const CHAIN_INFO: Record<SupportedChain, { name: string; color: string; icon: st
   'optimism': { name: 'Optimism', color: 'bg-red-500', icon: '🔴' },
 }
 
-const chainAllocationSchema = z.object({
-  chain: z.enum(SUPPORTED_CHAINS),
+const tokenAllocationSchema = z.object({
+  token: z.string().min(1, "Token is required"),
   percentage: z.number().min(0).max(100, "Percentage must be 0-100")
 })
 
@@ -34,95 +37,18 @@ const profileSchema = z.object({
   ensName: z.string()
     .min(1, "ENS name is required")
     .regex(/\.eth$/, "Must be a valid .eth name (e.g., alice.eth)"),
-  chainAllocations: z.array(chainAllocationSchema)
-    .min(1, "At least one chain allocation required")
+  chain: z.enum(SUPPORTED_CHAINS),
+  allocations: z.array(tokenAllocationSchema)
+    .min(1, "At least one token allocation required")
     .refine(
       (allocs) => {
         const sum = allocs.reduce((acc, curr) => acc + curr.percentage, 0)
         return sum === 100
       },
-      { message: "Chain allocations must sum to exactly 100%" }
+      { message: "Token allocations must sum to exactly 100%" }
     ),
-  fallbackChain: z.enum(SUPPORTED_CHAINS).optional()
+  slippageTolerance: z.number().min(1).max(5),
 })
-
-type ProfileFormData = z.infer<typeof profileSchema>
-
-// Chain Allocation Sliders Component
-function ChainAllocationSliders({
-  allocations,
-  onChange,
-  disabled
-}: {
-  allocations: ChainAllocation[]
-  onChange: (allocations: ChainAllocation[]) => void
-  disabled?: boolean
-}) {
-  const handlePercentageChange = (chain: SupportedChain, newPercentage: number) => {
-    const existingAlloc = allocations.find(a => a.chain === chain)
-
-    if (existingAlloc) {
-      // Update existing allocation
-      onChange(allocations.map(a =>
-        a.chain === chain ? { ...a, percentage: newPercentage } : a
-      ))
-    } else if (newPercentage > 0) {
-      // Add new allocation
-      onChange([...allocations, { chain, percentage: newPercentage }])
-    }
-  }
-
-  const getChainPercentage = (chain: SupportedChain) => {
-    return allocations.find(a => a.chain === chain)?.percentage || 0
-  }
-
-  const totalPercentage = allocations.reduce((sum, a) => sum + a.percentage, 0)
-
-  return (
-    <div className="space-y-4">
-      {SUPPORTED_CHAINS.map((chain) => {
-        const info = CHAIN_INFO[chain]
-        const percentage = getChainPercentage(chain)
-
-        return (
-          <div key={chain} className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${info.color}`} />
-                <span className="text-sm font-medium text-white">{info.name}</span>
-              </div>
-              <span className="text-sm font-bold text-[#c084fc]">{percentage}%</span>
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              value={percentage}
-              disabled={disabled}
-              onChange={(e) => handlePercentageChange(chain, parseInt(e.target.value))}
-              className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#c084fc]"
-            />
-          </div>
-        )
-      })}
-
-      <div className="pt-3 border-t border-white/10">
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-white/50">Total Allocation</span>
-          <span className={`text-sm font-bold ${totalPercentage === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {totalPercentage}%
-          </span>
-        </div>
-        {totalPercentage !== 100 && (
-          <p className="text-xs text-red-400 mt-1">
-            Must equal 100% (currently {totalPercentage > 100 ? `${totalPercentage - 100}% over` : `${100 - totalPercentage}% remaining`})
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export default function ProfilePage() {
   const { isConnected } = useAccount()
@@ -146,24 +72,26 @@ export default function ProfilePage() {
     mode: 'onChange',
     defaultValues: {
       ensName: '',
-      chainAllocations: [{ chain: 'base', percentage: 100 }],
-      fallbackChain: undefined,
+      chain: 'base',
+      allocations: [{ token: 'USDC', percentage: 100 }],
+      slippageTolerance: 1,
     },
   })
 
-  const chainAllocations = watch('chainAllocations')
+  const allocations = watch('allocations')
+  const chain = watch('chain')
+  const slippageTolerance = watch('slippageTolerance')
   const ensNameValue = watch('ensName')
-  const fallbackChain = watch('fallbackChain')
 
-  // Calculate total allocation percentage
-  const totalAllocation = chainAllocations.reduce((sum, a) => sum + a.percentage, 0)
+  const totalAllocation = allocations.reduce((sum, a) => sum + a.percentage, 0)
 
   useEffect(() => {
     if (existingProfile) {
       reset({
         ensName: existingProfile.ensName,
-        chainAllocations: existingProfile.chainAllocations,
-        fallbackChain: existingProfile.fallbackChain,
+        chain: existingProfile.chain,
+        allocations: existingProfile.tokenAllocations,
+        slippageTolerance: existingProfile.slippageTolerance,
       })
       setIsEditing(false)
     } else if (ensName) {
@@ -217,7 +145,7 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <p className="text-white/50 text-center">
-                Connect your wallet to set up your ChainRouter profile and configure cross-chain payment preferences
+                Connect your wallet to set up your ChainRouter profile and configure payment preferences
               </p>
               <div className="flex justify-center">
                 <WalletConnect />
@@ -253,7 +181,7 @@ export default function ProfilePage() {
               </div>
               <h2 className="text-3xl font-bold text-white mb-3">Profile Saved!</h2>
               <p className="text-white/50 mb-8">
-                Your chain allocation preferences have been saved on-chain. You're ready to receive cross-chain payments.
+                Your payment preferences have been saved on-chain. You're ready to receive payments.
               </p>
               {txHash && (
                 <p className="text-xs text-white/30 mb-4 font-mono break-all">
@@ -303,6 +231,7 @@ export default function ProfilePage() {
         <div className="fixed inset-0 bg-black/60 z-0 pointer-events-none" />
 
         <div className="relative z-10 container mx-auto max-w-3xl px-4 py-12">
+          {/* Profile Header Card */}
           <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl mb-6 overflow-hidden">
             <div className="relative h-32 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6]">
               <div className="absolute inset-0 bg-black/20" />
@@ -337,70 +266,81 @@ export default function ProfilePage() {
                       <div className="w-2 h-2 rounded-full bg-emerald-400" />
                       <span className="text-xs font-medium text-emerald-400">Active Profile</span>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Chain Allocations Card */}
-          <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl mb-6">
-            <CardContent className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-[#c084fc]/20 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-[#c084fc]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                  </svg>
-                </div>
-                <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Chain Allocations</h3>
-              </div>
-
-              {/* Allocation Bar */}
-              <div className="mb-4">
-                <div className="flex h-4 w-full overflow-hidden rounded-full">
-                  {existingProfile.chainAllocations.map((alloc, idx) => {
-                    const info = CHAIN_INFO[alloc.chain] || { color: 'bg-gray-500' }
-                    return (
-                      <div
-                        key={idx}
-                        className={`${info.color} transition-all`}
-                        style={{ width: `${alloc.percentage}%` }}
-                        title={`${alloc.chain}: ${alloc.percentage}%`}
-                      />
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Chain Legend */}
-              <div className="space-y-2">
-                {existingProfile.chainAllocations.map((alloc, i) => {
-                  const info = CHAIN_INFO[alloc.chain] || { name: alloc.chain, color: 'bg-gray-500', icon: '●' }
-                  return (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-3 h-3 rounded-full ${info.color}`} />
-                        <span className="text-sm text-white">{info.name}</span>
-                      </div>
-                      <span className="text-sm font-bold text-[#c084fc]">{alloc.percentage}%</span>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#c084fc]/20 border border-[#c084fc]/30">
+                      <span className="text-xs font-medium text-[#c084fc] capitalize">
+                        {CHAIN_INFO[existingProfile.chain]?.name || existingProfile.chain}
+                      </span>
                     </div>
-                  )
-                })}
-              </div>
-
-              {/* Fallback Chain */}
-              {existingProfile.fallbackChain && (
-                <div className="mt-4 pt-4 border-t border-white/10">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-white/50">Fallback Chain</span>
-                    <span className="text-sm text-[#c084fc]">
-                      {CHAIN_INFO[existingProfile.fallbackChain]?.name || existingProfile.fallbackChain}
-                    </span>
                   </div>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
+
+          <div className="grid md:grid-cols-2 gap-6 mb-6">
+            {/* Token Allocation Card */}
+            <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-[#c084fc]/20 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-[#c084fc]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Token Allocation</h3>
+                </div>
+                <div className="space-y-2">
+                  {existingProfile.tokenAllocations.map((alloc, i) => (
+                    <div key={i} className="relative">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-white">{alloc.token}</span>
+                        <span className="text-sm font-bold text-[#c084fc]">{alloc.percentage}%</span>
+                      </div>
+                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] rounded-full transition-all"
+                          style={{ width: `${alloc.percentage}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Preferences Card */}
+            <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-[#c084fc]/20 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-[#c084fc]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Preferences</h3>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                    <div>
+                      <div className="text-sm font-medium text-white mb-0.5">Destination Chain</div>
+                      <div className="text-xs text-white/50">Where payments are received</div>
+                    </div>
+                    <div className="text-sm font-bold text-[#c084fc] capitalize">
+                      {CHAIN_INFO[existingProfile.chain]?.name || existingProfile.chain}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
+                    <div>
+                      <div className="text-sm font-medium text-white mb-0.5">Slippage Tolerance</div>
+                      <div className="text-xs text-white/50">Maximum price movement for swaps</div>
+                    </div>
+                    <div className="text-xl font-bold text-[#c084fc]">{existingProfile.slippageTolerance}%</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           {/* Payment Link Card */}
           <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl mb-6">
@@ -422,7 +362,7 @@ export default function ProfilePage() {
                 </Button>
               </div>
               <p className="text-xs text-white/40 mb-3">
-                Share this link to receive payments directly to your configured chains
+                Share this link to receive payments directly to your configured chain
               </p>
 
               {showQR && (
@@ -445,7 +385,6 @@ export default function ProfilePage() {
                       const canvas = document.createElement('canvas')
                       const ctx = canvas.getContext('2d')!
                       const img = new Image()
-                      // Add padding for the white background
                       const padding = 32
                       const size = 180 + padding * 2
                       canvas.width = size
@@ -572,40 +511,55 @@ export default function ProfilePage() {
             {hasProfile ? 'Update' : 'Set Up'} Your <span className="text-[#c084fc]">Profile</span>
           </h1>
           <p className="text-white/40">
-            Configure your chain allocation preferences once, use everywhere
+            Configure your payment preferences once, use everywhere
           </p>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-4">
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* ENS Name Card */}
-              <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
-                <CardContent className="p-4">
-                  <label className="block text-sm font-medium text-white/80 mb-2">
-                    ENS Name <span className="text-red-400">*</span>
-                  </label>
-                  <Input
-                    {...register('ensName')}
-                    placeholder="alice.eth"
-                    disabled={isWriting || profileLoading}
-                    className={`bg-black/30 border-white/10 text-white placeholder:text-white/30 h-10 ${errors.ensName ? 'border-red-500/50' : ''}`}
-                  />
-                  {errors.ensName ? (
-                    <p className="text-xs text-red-400 mt-1">{errors.ensName.message}</p>
-                  ) : (
-                    <p className="text-xs text-white/30 mt-1">Must end with .eth</p>
-                  )}
-                </CardContent>
-              </Card>
+              <div className="grid md:grid-cols-2 gap-4">
+                {/* ENS Name */}
+                <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <CardContent className="p-4">
+                    <label className="block text-sm font-medium text-white/80 mb-2">
+                      ENS Name <span className="text-red-400">*</span>
+                    </label>
+                    <Input
+                      {...register('ensName')}
+                      placeholder="alice.eth"
+                      disabled={isWriting || profileLoading}
+                      className={`bg-black/30 border-white/10 text-white placeholder:text-white/30 h-10 ${errors.ensName ? 'border-red-500/50' : ''}`}
+                    />
+                    {errors.ensName ? (
+                      <p className="text-xs text-red-400 mt-1">{errors.ensName.message}</p>
+                    ) : (
+                      <p className="text-xs text-white/30 mt-1">Must end with .eth</p>
+                    )}
+                  </CardContent>
+                </Card>
 
-              {/* Chain Allocations Card */}
+                {/* Destination Chain */}
+                <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <CardContent className="p-4">
+                    <label className="block text-sm font-medium text-white/80 mb-2">
+                      Destination Chain
+                    </label>
+                    <ChainSelector
+                      value={chain}
+                      onChange={(value) => setValue('chain', value as SupportedChain, { shouldValidate: true })}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Token Allocation */}
               <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
                 <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <label className="text-sm font-medium text-white/80">
-                        Chain Allocations
+                        Token Allocation
                       </label>
                       <Info className="w-4 h-4 text-white/30" />
                     </div>
@@ -614,47 +568,50 @@ export default function ProfilePage() {
                     </span>
                   </div>
 
-                  <p className="text-xs text-white/40 mb-4">
-                    Specify what percentage of incoming USDC you want on each chain
+                  <p className="text-xs text-white/40 mb-3">
+                    Incoming USDC will be auto-swapped into these tokens on arrival
                   </p>
 
-                  <ChainAllocationSliders
-                    allocations={chainAllocations}
+                  <AllocationSliders
+                    allocations={allocations}
                     onChange={(newAllocations) => {
-                      setValue('chainAllocations', newAllocations.filter(a => a.percentage > 0), { shouldValidate: true })
+                      setValue('allocations', newAllocations, { shouldValidate: true })
                     }}
+                    chain={chain}
                     disabled={isWriting}
                   />
 
-                  {errors.chainAllocations && (
+                  {errors.allocations && (
                     <p className="text-xs text-red-400 mt-2">
-                      {errors.chainAllocations.message}
+                      {errors.allocations.message}
                     </p>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Fallback Chain Card */}
+              {/* Slippage */}
               <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
                 <CardContent className="p-4">
-                  <label className="block text-sm font-medium text-white/80 mb-2">
-                    Fallback Chain (Optional)
-                  </label>
-                  <p className="text-xs text-white/40 mb-3">
-                    If a bridge fails, funds will be sent to this chain instead
-                  </p>
-                  <select
-                    {...register('fallbackChain')}
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-sm font-medium text-white/80">
+                      Slippage Tolerance
+                    </label>
+                    <span className="text-xl font-bold text-[#c084fc]">{slippageTolerance}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="0.1"
+                    value={slippageTolerance}
                     disabled={isWriting}
-                    className="w-full h-10 bg-black/30 border border-white/10 text-white rounded-md px-3 text-sm"
-                  >
-                    <option value="">No fallback</option>
-                    {SUPPORTED_CHAINS.map((chain) => (
-                      <option key={chain} value={chain}>
-                        {CHAIN_INFO[chain].name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(e) => setValue('slippageTolerance', parseFloat(e.target.value), { shouldValidate: true })}
+                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#c084fc]"
+                  />
+                  <div className="flex justify-between text-xs text-white/30 mt-1">
+                    <span>1%</span>
+                    <span>5%</span>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -710,58 +667,37 @@ export default function ProfilePage() {
                         <div className="font-bold text-white truncate">
                           {ensNameValue || 'your-name.eth'}
                         </div>
-                        <div className="text-xs text-white/50">
-                          ENS Router Profile
+                        <div className="text-xs text-white/50 capitalize">
+                          {CHAIN_INFO[chain]?.name || chain}
                         </div>
                       </div>
                     </div>
 
-                    {/* Chain Allocation Preview */}
                     <div>
-                      <div className="text-xs text-white/50 mb-2">Chain Allocation</div>
-
-                      {/* Mini allocation bar */}
-                      <div className="flex h-2 w-full overflow-hidden rounded-full mb-2">
-                        {chainAllocations.filter(a => a.percentage > 0).map((alloc, idx) => {
-                          const info = CHAIN_INFO[alloc.chain] || { color: 'bg-gray-500' }
-                          return (
-                            <div
-                              key={idx}
-                              className={`${info.color} transition-all`}
-                              style={{ width: `${alloc.percentage}%` }}
-                            />
-                          )
-                        })}
-                      </div>
-
-                      <div className="space-y-1">
-                        {chainAllocations.filter(a => a.percentage > 0).map((alloc, i) => {
-                          const info = CHAIN_INFO[alloc.chain] || { name: alloc.chain, color: 'bg-gray-500' }
-                          return (
-                            <div key={i} className="flex items-center gap-2">
-                              <div className={`w-2 h-2 rounded-full ${info.color}`} />
-                              <span className="text-xs text-white/70 flex-1">
-                                {info.name}
-                              </span>
-                              <span className="text-xs font-medium text-[#c084fc]">
-                                {alloc.percentage}%
-                              </span>
+                      <div className="text-xs text-white/50 mb-2">Token Allocation</div>
+                      <div className="space-y-1.5">
+                        {allocations.map((alloc, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-[#c084fc] rounded-full"
+                                style={{ width: `${alloc.percentage}%` }}
+                              />
                             </div>
-                          )
-                        })}
+                            <span className="text-xs text-white/70 w-16 text-right">
+                              {alloc.token} {alloc.percentage}%
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    {fallbackChain && (
-                      <div className="pt-3 border-t border-white/10">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-white/50">Fallback</span>
-                          <span className="text-[#c084fc]">
-                            {CHAIN_INFO[fallbackChain]?.name || fallbackChain}
-                          </span>
-                        </div>
+                    <div className="pt-3 border-t border-white/10 space-y-2">
+                      <div className="flex justify-between text-xs">
+                        <span className="text-white/50">Slippage</span>
+                        <span className="text-[#c084fc] font-medium">{slippageTolerance}%</span>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

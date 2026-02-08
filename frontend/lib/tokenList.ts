@@ -152,3 +152,19 @@ export function getAvailableTokens(chain: string): Token[] {
       return BASE_TOKENS
   }
 }
+
+// LI.FI uses the zero address for native tokens (ETH, MATIC, etc.)
+const NATIVE_TOKEN_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+/**
+ * Get the token contract address for a given symbol on a given chain.
+ * Returns the zero address for native tokens (ETH, MATIC).
+ * Returns undefined if the token is not found on that chain.
+ */
+export function getTokenAddress(symbol: string, chain: string): string | undefined {
+  const tokens = getAvailableTokens(chain)
+  const token = tokens.find(t => t.symbol.toUpperCase() === symbol.toUpperCase())
+  if (!token) return undefined
+  // Native tokens (no contract address) use the zero address for LI.FI
+  return token.address || NATIVE_TOKEN_ADDRESS
+}

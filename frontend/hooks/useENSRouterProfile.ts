@@ -1,46 +1,36 @@
 import { useEnsAddress, useEnsText, useEnsName, useEnsAvatar } from 'wagmi'
 import { normalize } from 'viem/ens'
 import { useAccount } from 'wagmi'
-import type { ParsedProfile, ChainAllocation, SupportedChain } from '@/types'
+import type { ParsedProfile, TokenAllocation, SupportedChain } from '@/types'
 import { SUPPORTED_CHAINS } from '@/types'
 
 const ENS_CHAIN_ID = 1
 
-// Parse chain allocations from text record
-// Format: "base:80,arbitrum:10,ethereum:10"
-function parseChainAllocations(raw: string | undefined): ChainAllocation[] {
+// Parse token allocations from text record
+// Format: "USDC:60,ETH:30,DAI:10"
+function parseTokenAllocations(raw: string | undefined): TokenAllocation[] {
   if (!raw || raw === '') {
-    // Default: 100% on base
-    return [{ chain: 'base', percentage: 100 }]
+    return [{ token: 'USDC', percentage: 100 }]
   }
 
   try {
     const allocations = raw.split(',').map(part => {
-      const [chain, pct] = part.split(':')
-      const chainTrimmed = chain.trim() as SupportedChain
-
-      // Validate it's a supported chain
-      if (!SUPPORTED_CHAINS.includes(chainTrimmed)) {
-        console.warn('Unsupported chain in allocation:', chainTrimmed)
-        return null
-      }
-
+      const [token, pct] = part.trim().split(':')
       return {
-        chain: chainTrimmed,
-        percentage: parseInt(pct)
+        token: token.trim(),
+        percentage: parseInt(pct.trim(), 10),
       }
-    }).filter((a): a is ChainAllocation => a !== null && !isNaN(a.percentage))
+    }).filter(a => !isNaN(a.percentage) && a.token)
 
-    // Validate total is 100%
     const total = allocations.reduce((sum, a) => sum + a.percentage, 0)
     if (total !== 100) {
-      console.warn('Chain allocation percentages do not sum to 100:', total, raw)
+      console.warn('Token allocation percentages do not sum to 100:', total, raw)
     }
 
-    return allocations.length > 0 ? allocations : [{ chain: 'base', percentage: 100 }]
+    return allocations.length > 0 ? allocations : [{ token: 'USDC', percentage: 100 }]
   } catch (error) {
-    console.error('Failed to parse chain allocations:', raw, error)
-    return [{ chain: 'base', percentage: 100 }]
+    console.error('Failed to parse token allocations:', raw, error)
+    return [{ token: 'USDC', percentage: 100 }]
   }
 }
 
@@ -66,20 +56,30 @@ export function useChainRouterProfile(ensName?: string) {
     },
   })
 
-  // Read chain allocation text record
-  const { data: chainAlloc, isLoading: chainAllocLoading } = useEnsText({
+  // Read destination chain
+  const { data: chain, isLoading: chainLoading } = useEnsText({
     name: normalizedName,
-    key: 'ENSRouter.chainAlloc',
+    key: 'ENSRouter.chain',
     chainId: ENS_CHAIN_ID,
     query: {
       enabled: !!normalizedName,
     },
   })
 
-  // Read fallback chain
-  const { data: fallback, isLoading: fallbackLoading } = useEnsText({
+  // Read token allocation text record
+  const { data: tokenAlloc, isLoading: tokenAllocLoading } = useEnsText({
     name: normalizedName,
-    key: 'ENSRouter.fallback',
+    key: 'ENSRouter.tokenAlloc',
+    chainId: ENS_CHAIN_ID,
+    query: {
+      enabled: !!normalizedName,
+    },
+  })
+
+  // Read slippage
+  const { data: slippage, isLoading: slippageLoading } = useEnsText({
+    name: normalizedName,
+    key: 'ENSRouter.slippage',
     chainId: ENS_CHAIN_ID,
     query: {
       enabled: !!normalizedName,
@@ -89,13 +89,14 @@ export function useChainRouterProfile(ensName?: string) {
   const isLoading =
     nameLoading ||
     addressLoading ||
-    chainAllocLoading ||
-    fallbackLoading
+    chainLoading ||
+    tokenAllocLoading ||
+    slippageLoading
 
   // For basic profile, we just need an address
   const hasBasicProfile = !!address && !!nameToUse
-  // For full router profile, we need chain allocations
-  const hasRouterProfile = !!chainAlloc && chainAlloc !== ''
+  // For full router profile, we need at least a chain set
+  const hasRouterProfile = !!chain && chain !== ''
 
   // Return loading state
   if (isLoading) {
@@ -121,15 +122,20 @@ export function useChainRouterProfile(ensName?: string) {
     }
   }
 
-  // Parse chain allocations
-  const chainAllocations = parseChainAllocations(chainAlloc ?? undefined)
+  // Parse fields
+  const destChain: SupportedChain = (SUPPORTED_CHAINS.includes(chain as SupportedChain)
+    ? chain as SupportedChain
+    : 'base')
+  const tokenAllocations = parseTokenAllocations(tokenAlloc ?? undefined)
+  const slippageTolerance = slippage ? parseFloat(slippage) : 1
 
   // Return parsed profile
   const profile: ParsedProfile = {
     ensName: nameToUse,
     address,
-    chainAllocations,
-    fallbackChain: (fallback as SupportedChain) || undefined,
+    chain: destChain,
+    tokenAllocations,
+    slippageTolerance,
   }
 
   return {

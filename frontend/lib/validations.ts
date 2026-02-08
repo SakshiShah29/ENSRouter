@@ -12,7 +12,7 @@ export const profileSchema = z.object({
     token: z.string(),
     percentage: z.number().min(0).max(100)
   })).min(1),
-  slippageTolerance: z.number().min(0.1).max(5),
+  slippageTolerance: z.number().min(1).max(5),
   autoSwapEnabled: z.boolean()
 })
 

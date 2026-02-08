@@ -13,12 +13,10 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
   const { chain: senderChain } = useAccount()
 
   const sourceChainKey = senderChain ? CHAIN_ID_TO_KEY[senderChain.id] : undefined
-  //@ts-ignore
   const needsBridge = !!sourceChainKey && sourceChainKey !== profile.chain
 
   const { data: estimate, isLoading: estimateLoading } = useBridgeEstimate({
     sourceChain: sourceChainKey ?? '',
-    //@ts-ignore
     destChain: profile.chain,
     amount,
     enabled: needsBridge,
@@ -72,9 +70,23 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
 
           <div className="border-t pt-3">
             <p className="text-sm font-medium mb-2">
-              {/* @ts-ignore */}
               {profile.ensName} will receive on {profile.chain}:
             </p>
+            <div className="space-y-1">
+              {profile.tokenAllocations.map((alloc, i) => {
+                const usdcAmount = parseFloat(amount) > 0
+                  ? ((parseFloat(amount) * alloc.percentage) / 100).toFixed(2)
+                  : null
+                return (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-gray-600">{alloc.token} ({alloc.percentage}%)</span>
+                    <span className="font-medium">
+                      {usdcAmount ? `${usdcAmount} USDC → ${alloc.token}` : `${alloc.percentage}%`}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </CardContent>

@@ -43,7 +43,7 @@ export function PaymentStatusTracker({ transaction }: PaymentStatusTrackerProps)
           <Progress value={progress} className="h-2 bg-gray-700" />
           <div className="flex justify-between text-xs text-gray-400">
             <span>From: {transaction.sourceChain}</span>
-            <span>{completedTransfers} of {totalTransfers} chains complete</span>
+            <span>{completedTransfers} of {totalTransfers} transfers complete</span>
           </div>
         </div>
       </CardHeader>
@@ -130,13 +130,14 @@ function ChainTransferCard({ transfer, index }: { transfer: ChainTransfer; index
           {getStatusIcon()}
           <div className="text-left">
             <div className="flex items-center gap-2">
-              <span className={`font-medium ${chainInfo.color}`}>{chainInfo.name}</span>
+              <span className="font-medium text-white">{transfer.token}</span>
+              <span className={`text-xs ${chainInfo.color}`}>on {chainInfo.name}</span>
               <Badge variant="outline" className="text-xs border-gray-600">
                 {transfer.percentage}%
               </Badge>
             </div>
             <p className="text-sm text-gray-400">
-              {transfer.amount} USDC
+              {transfer.amount} USDC → {transfer.token}
             </p>
           </div>
         </div>
