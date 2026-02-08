@@ -12,7 +12,8 @@ import { Input } from '@/components/ui/input'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { WalletConnect } from '@/components/WalletConnect'
 import Dither from '@/components/Dither'
-import { ArrowRight, Check, Loader2, Edit2, Info } from 'lucide-react'
+import { ArrowRight, Check, Loader2, Edit2, Info, Copy, Link, QrCode, Download } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { SUPPORTED_CHAINS, type SupportedChain, type ChainAllocation } from '@/types'
 
 // Chain display info
@@ -129,6 +130,8 @@ export default function ProfilePage() {
 
   const [isEditing, setIsEditing] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [showQR, setShowQR] = useState(false)
 
   const {
     register,
@@ -395,6 +398,123 @@ export default function ProfilePage() {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Payment Link Card */}
+          <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl mb-6">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                    <Link className="w-4 h-4 text-emerald-400" />
+                  </div>
+                  <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Payment Link</h3>
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => setShowQR(!showQR)}
+                  className={`h-9 px-3 rounded-lg text-xs font-medium ${showQR ? 'bg-[#c084fc]/20 border-[#c084fc]/30 text-[#c084fc]' : 'bg-white/10 border-white/10 text-white/70'} border`}
+                >
+                  <QrCode className="w-4 h-4 mr-1.5" />
+                  QR Code
+                </Button>
+              </div>
+              <p className="text-xs text-white/40 mb-3">
+                Share this link to receive payments directly to your configured chains
+              </p>
+
+              {showQR && (
+                <div className="flex flex-col items-center gap-3 mb-4">
+                  <div id="qr-code-container" className="bg-white rounded-2xl p-4">
+                    <QRCodeSVG
+                      value={typeof window !== 'undefined' ? `${window.location.origin}/send/${existingProfile.ensName}` : `https://ensrouter.xyz/send/${existingProfile.ensName}`}
+                      size={180}
+                      level="H"
+                      bgColor="#ffffff"
+                      fgColor="#000000"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const svg = document.querySelector('#qr-code-container svg') as SVGSVGElement
+                      if (!svg) return
+                      const svgData = new XMLSerializer().serializeToString(svg)
+                      const canvas = document.createElement('canvas')
+                      const ctx = canvas.getContext('2d')!
+                      const img = new Image()
+                      // Add padding for the white background
+                      const padding = 32
+                      const size = 180 + padding * 2
+                      canvas.width = size
+                      canvas.height = size
+                      img.onload = () => {
+                        ctx.fillStyle = '#ffffff'
+                        ctx.fillRect(0, 0, size, size)
+                        ctx.drawImage(img, padding, padding)
+                        const link = document.createElement('a')
+                        link.download = `${existingProfile.ensName}-payment-qr.png`
+                        link.href = canvas.toDataURL('image/png')
+                        link.click()
+                      }
+                      img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
+                    }}
+                    className="h-9 px-4 rounded-lg text-xs font-medium bg-white/10 border border-white/10 text-white/70 hover:bg-white/20"
+                  >
+                    <Download className="w-4 h-4 mr-1.5" />
+                    Download QR
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-black/30 border border-white/10 rounded-lg px-4 py-3 font-mono text-sm text-[#c084fc] truncate">
+                  {typeof window !== 'undefined' ? `${window.location.origin}/send/${existingProfile.ensName}` : `/send/${existingProfile.ensName}`}
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    const url = `${window.location.origin}/send/${existingProfile.ensName}`
+                    navigator.clipboard.writeText(url)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  className={`h-12 w-12 rounded-lg flex-shrink-0 ${copied ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-white/10 border-white/10'} border`}
+                >
+                  {copied ? (
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-white/70" />
+                  )}
+                </Button>
+              </div>
+              {copied && (
+                <p className="text-xs text-emerald-400 mt-2">Copied to clipboard!</p>
+              )}
+
+              {/* Share on X */}
+              <Button
+                type="button"
+                onClick={() => {
+                  const paymentUrl = `${window.location.origin}/send/${existingProfile.ensName}`
+                  const text = `I just set up my @ENSRouter profile!\n\nYou can now send me cross-chain USDC payments by scanning my QR code or clicking the link below.\n\n${paymentUrl}`
+                  window.open(
+                    `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
+                    '_blank',
+                    'noopener,noreferrer'
+                  )
+                }}
+                className="w-full mt-3 h-11 rounded-lg text-sm font-medium bg-white text-black hover:bg-white/90 flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                Share on X
+              </Button>
+              <p className="text-xs text-white/30 mt-2 text-center">
+                Tip: Download the QR code first, then attach it to your post
+              </p>
             </CardContent>
           </Card>
 
