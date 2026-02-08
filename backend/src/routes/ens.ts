@@ -44,7 +44,7 @@ export const createENSRouter = (ensService: ENSService): Router => {
   });
 
   // Register/update user mapping (from frontend after setProfile, or manual)
-  // When on-chain resolution fails (e.g. Sepolia ENS with mainnet RPC), we still store so /link can find the user.
+  // When on-chain resolution fails, we still store so /link can find the user.
  router.post('/register', async (req, res) => {
   console.log('\n=== /register endpoint called ===');
   console.log('Timestamp:', new Date().toISOString());

@@ -23,21 +23,21 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
   })
 
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <h3 className="font-semibold mb-4">Payment Preview</h3>
+    <Card className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl shadow-xl">
+      <CardContent className="p-6">
+        <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider mb-4">Payment Preview</h3>
 
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Total Amount:</span>
-            <span className="font-medium">{amount} USDC</span>
+            <span className="text-white/50">Total Amount</span>
+            <span className="font-medium text-white">{amount} USDC</span>
           </div>
 
           {/* Bridge fee estimate */}
           {needsBridge && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Bridge Fee:</span>
-              <span className="font-medium">
+              <span className="text-white/50">Bridge Fee</span>
+              <span className="font-medium text-white">
                 {estimateLoading
                   ? 'Estimating...'
                   : estimate?.fees?.length
@@ -49,8 +49,8 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
 
           {needsBridge && (
             <div className="flex justify-between text-sm">
-              <span className="text-gray-600">Est. Delivery:</span>
-              <span className="font-medium">
+              <span className="text-white/50">Est. Delivery</span>
+              <span className="font-medium text-white">
                 {estimateLoading
                   ? 'Estimating...'
                   : estimate?.estimatedTime
@@ -63,14 +63,14 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
           )}
 
           {!needsBridge && sourceChainKey && (
-            <div className="text-xs text-green-600 font-medium">
+            <div className="text-xs text-[#a3e635] font-medium">
               Same chain — no bridge needed
             </div>
           )}
 
-          <div className="border-t pt-3">
-            <p className="text-sm font-medium mb-2">
-              {profile.ensName} will receive on {profile.chain}:
+          <div className="border-t border-white/10 pt-3">
+            <p className="text-sm font-medium text-white/80 mb-2">
+              {profile.ensName} will receive on <span className="text-[#a3e635]">{profile.chain}</span>:
             </p>
             <div className="space-y-1">
               {profile.tokenAllocations.map((alloc, i) => {
@@ -79,8 +79,8 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
                   : null
                 return (
                   <div key={i} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{alloc.token} ({alloc.percentage}%)</span>
-                    <span className="font-medium">
+                    <span className="text-white/50">{alloc.token} ({alloc.percentage}%)</span>
+                    <span className="font-medium text-white">
                       {usdcAmount ? `${usdcAmount} USDC → ${alloc.token}` : `${alloc.percentage}%`}
                     </span>
                   </div>

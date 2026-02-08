@@ -1,12 +1,10 @@
 // Chain types matching your frontend
-export type SupportedChain = 
-  | 'ethereum' 
-  | 'ethereum-sepolia' 
-  | 'base' 
-  | 'base-sepolia' 
-  | 'arbitrum' 
-  | 'arbitrum-sepolia' 
-  | 'arc-testnet';
+export type SupportedChain =
+  | 'ethereum'
+  | 'base'
+  | 'arbitrum'
+  | 'polygon'
+  | 'optimism';
 
 // Bridge step types from Circle Bridge Kit
 export interface BridgeStepPayload {

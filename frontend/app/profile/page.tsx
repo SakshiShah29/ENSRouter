@@ -13,6 +13,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { ChainSelector } from '@/components/ChainSelector'
 import { AllocationSliders } from '@/components/AllocationSliders'
 import { WalletConnect } from '@/components/WalletConnect'
+import { ENSNavbar } from '@/components/ui/ENSNavbar'
+import { ENSProfileCard } from '@/components/ENSProfileCard'
 import Dither from '@/components/Dither'
 import { ArrowRight, Check, Loader2, Edit2, Info, Copy, Link, QrCode, Download } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
@@ -120,6 +122,7 @@ export default function ProfilePage() {
   if (!isConnected) {
     return (
       <div className="relative min-h-screen bg-black overflow-hidden">
+        <ENSNavbar />
         <div className="absolute inset-0 opacity-30">
           <Dither
             waveColor={[0.3, 0.3, 0.3]}
@@ -160,6 +163,7 @@ export default function ProfilePage() {
   if (showSuccess) {
     return (
       <div className="relative min-h-screen bg-black overflow-hidden">
+        <ENSNavbar />
         <div className="absolute inset-0 opacity-30">
           <Dither
             waveColor={[0.3, 0.3, 0.3]}
@@ -214,10 +218,10 @@ export default function ProfilePage() {
 
   if (hasProfile && existingProfile && !isEditing) {
     return (
-      <div className="relative min-h-screen bg-black">
-        <div className="fixed inset-0 z-0">
+      <div className="relative min-h-screen bg-black text-white overflow-x-hidden">
+        <div className="absolute inset-0 z-0">
           <Dither
-            waveColor={[0.25, 0.25, 0.25]}
+            waveColor={[0.5, 0.5, 0.5]}
             disableAnimation={false}
             enableMouseInteraction
             mouseRadius={0.3}
@@ -228,254 +232,172 @@ export default function ProfilePage() {
           />
         </div>
 
-        <div className="fixed inset-0 bg-black/60 z-0 pointer-events-none" />
+        <ENSNavbar />
 
-        <div className="relative z-10 container mx-auto max-w-3xl px-4 py-12">
-          {/* Profile Header Card */}
-          <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl mb-6 overflow-hidden">
-            <div className="relative h-32 bg-gradient-to-r from-[#c084fc] to-[#8b5cf6]">
-              <div className="absolute inset-0 bg-black/20" />
+        <div className="relative z-10 container mx-auto max-w-6xl px-4 pt-28 pb-16">
+          {/* Hero-style heading */}
+          <div className="text-center mb-12">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm mb-6">
+              <span className="w-2 h-2 rounded-full bg-[#a3e635]" />
+              <span className="text-xs font-medium text-white/70 tracking-widest uppercase">
+                Your Profile
+              </span>
             </div>
-            <CardContent className="relative -mt-16 px-8 pb-8">
-              <div className="flex items-end gap-6 mb-6">
-                <div className="relative">
-                  <div className="w-32 h-32 rounded-2xl bg-black/30 border-4 border-black/50 backdrop-blur-xl overflow-hidden">
-                    <img
-                      src={`https://metadata.ens.domains/mainnet/avatar/${existingProfile.ensName}`}
-                      alt={existingProfile.ensName}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${existingProfile.ensName}`
-                      }}
-                    />
-                  </div>
-                  <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-emerald-500 border-4 border-black flex items-center justify-center">
-                    <Check className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-
-                <div className="flex-1 pb-2">
-                  <h1 className="text-3xl font-black text-white mb-1">
-                    {existingProfile.ensName}
-                  </h1>
-                  <p className="text-white/50 font-mono text-sm">
-                    {existingProfile.address.slice(0, 6)}...{existingProfile.address.slice(-4)}
-                  </p>
-                  <div className="flex gap-2 mt-3">
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/30">
-                      <div className="w-2 h-2 rounded-full bg-emerald-400" />
-                      <span className="text-xs font-medium text-emerald-400">Active Profile</span>
-                    </div>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#c084fc]/20 border border-[#c084fc]/30">
-                      <span className="text-xs font-medium text-[#c084fc] capitalize">
-                        {CHAIN_INFO[existingProfile.chain]?.name || existingProfile.chain}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            {/* Token Allocation Card */}
-            <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-[#c084fc]/20 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#c084fc]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Token Allocation</h3>
-                </div>
-                <div className="space-y-2">
-                  {existingProfile.tokenAllocations.map((alloc, i) => (
-                    <div key={i} className="relative">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-white">{alloc.token}</span>
-                        <span className="text-sm font-bold text-[#c084fc]">{alloc.percentage}%</span>
-                      </div>
-                      <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-[#c084fc] to-[#8b5cf6] rounded-full transition-all"
-                          style={{ width: `${alloc.percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Preferences Card */}
-            <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-lg bg-[#c084fc]/20 flex items-center justify-center">
-                    <svg className="w-4 h-4 text-[#c084fc]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Preferences</h3>
-                </div>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
-                    <div>
-                      <div className="text-sm font-medium text-white mb-0.5">Destination Chain</div>
-                      <div className="text-xs text-white/50">Where payments are received</div>
-                    </div>
-                    <div className="text-sm font-bold text-[#c084fc] capitalize">
-                      {CHAIN_INFO[existingProfile.chain]?.name || existingProfile.chain}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-black/20 rounded-lg">
-                    <div>
-                      <div className="text-sm font-medium text-white mb-0.5">Slippage Tolerance</div>
-                      <div className="text-xs text-white/50">Maximum price movement for swaps</div>
-                    </div>
-                    <div className="text-xl font-bold text-[#c084fc]">{existingProfile.slippageTolerance}%</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] mb-4">
+              <span className="text-white">{existingProfile.ensName.replace('.eth', '')}</span>
+              <span className="text-[#a3e635]">.eth</span>
+            </h1>
+            <p className="text-lg text-white/60 max-w-xl mx-auto font-normal">
+              Your payment preferences are live on-chain. Share your link to start receiving payments.
+            </p>
           </div>
 
-          {/* Payment Link Card */}
-          <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl mb-6">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <Link className="w-4 h-4 text-emerald-400" />
-                  </div>
-                  <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Payment Link</h3>
-                </div>
-                <Button
-                  type="button"
-                  onClick={() => setShowQR(!showQR)}
-                  className={`h-9 px-3 rounded-lg text-xs font-medium ${showQR ? 'bg-[#c084fc]/20 border-[#c084fc]/30 text-[#c084fc]' : 'bg-white/10 border-white/10 text-white/70'} border`}
-                >
-                  <QrCode className="w-4 h-4 mr-1.5" />
-                  QR Code
-                </Button>
-              </div>
-              <p className="text-xs text-white/40 mb-3">
-                Share this link to receive payments directly to your configured chain
-              </p>
+          {/* Grid layout */}
+          <div className="grid lg:grid-cols-5 gap-6">
+            {/* ENS Profile Card - takes 3 columns */}
+            <div className="lg:col-span-3">
+              <ENSProfileCard profile={existingProfile} />
+            </div>
 
-              {showQR && (
-                <div className="flex flex-col items-center gap-3 mb-4">
-                  <div id="qr-code-container" className="bg-white rounded-2xl p-4">
-                    <QRCodeSVG
-                      value={typeof window !== 'undefined' ? `${window.location.origin}/send/${existingProfile.ensName}` : `https://ensrouter.xyz/send/${existingProfile.ensName}`}
-                      size={180}
-                      level="H"
-                      bgColor="#ffffff"
-                      fgColor="#000000"
-                    />
+            {/* Right column - Payment Link + Actions */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Payment Link Card */}
+              <Card className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl shadow-xl">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-[#a3e635]/20 flex items-center justify-center">
+                        <Link className="w-4 h-4 text-[#a3e635]" />
+                      </div>
+                      <h3 className="text-sm font-medium text-white/80 uppercase tracking-wider">Payment Link</h3>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => setShowQR(!showQR)}
+                      className={`h-9 px-3 rounded-full text-xs font-medium transition-all ${showQR ? 'bg-[#a3e635]/20 border-[#a3e635]/30 text-[#a3e635]' : 'bg-white/10 border-white/20 text-white/70'} border`}
+                    >
+                      <QrCode className="w-4 h-4 mr-1.5" />
+                      QR Code
+                    </Button>
                   </div>
+                  <p className="text-xs text-white/40 mb-3">
+                    Share this link to receive payments directly to your configured chain
+                  </p>
+
+                  {showQR && (
+                    <div className="flex flex-col items-center gap-3 mb-4">
+                      <div id="qr-code-container" className="bg-white rounded-2xl p-4">
+                        <QRCodeSVG
+                          value={typeof window !== 'undefined' ? `${window.location.origin}/send/${existingProfile.ensName}` : `https://ensrouter.xyz/send/${existingProfile.ensName}`}
+                          size={180}
+                          level="H"
+                          bgColor="#ffffff"
+                          fgColor="#000000"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          const svg = document.querySelector('#qr-code-container svg') as SVGSVGElement
+                          if (!svg) return
+                          const svgData = new XMLSerializer().serializeToString(svg)
+                          const canvas = document.createElement('canvas')
+                          const ctx = canvas.getContext('2d')!
+                          const img = new Image()
+                          const padding = 32
+                          const size = 180 + padding * 2
+                          canvas.width = size
+                          canvas.height = size
+                          img.onload = () => {
+                            ctx.fillStyle = '#ffffff'
+                            ctx.fillRect(0, 0, size, size)
+                            ctx.drawImage(img, padding, padding)
+                            const link = document.createElement('a')
+                            link.download = `${existingProfile.ensName}-payment-qr.png`
+                            link.href = canvas.toDataURL('image/png')
+                            link.click()
+                          }
+                          img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
+                        }}
+                        className="h-9 px-4 rounded-full text-xs font-medium bg-white/10 border border-white/20 text-white/70 hover:bg-white/20 transition-all"
+                      >
+                        <Download className="w-4 h-4 mr-1.5" />
+                        Download QR
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-black/30 border border-white/10 rounded-full px-4 py-3 font-mono text-sm text-[#a3e635] truncate">
+                      {typeof window !== 'undefined' ? `${window.location.origin}/send/${existingProfile.ensName}` : `/send/${existingProfile.ensName}`}
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        const url = `${window.location.origin}/send/${existingProfile.ensName}`
+                        navigator.clipboard.writeText(url)
+                        setCopied(true)
+                        setTimeout(() => setCopied(false), 2000)
+                      }}
+                      className={`h-12 w-12 rounded-full flex-shrink-0 transition-all ${copied ? 'bg-[#a3e635]/20 border-[#a3e635]/30' : 'bg-white/10 border-white/20'} border`}
+                    >
+                      {copied ? (
+                        <Check className="w-4 h-4 text-[#a3e635]" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-white/70" />
+                      )}
+                    </Button>
+                  </div>
+                  {copied && (
+                    <p className="text-xs text-[#a3e635] mt-2">Copied to clipboard!</p>
+                  )}
+
+                  {/* Share on X */}
                   <Button
                     type="button"
                     onClick={() => {
-                      const svg = document.querySelector('#qr-code-container svg') as SVGSVGElement
-                      if (!svg) return
-                      const svgData = new XMLSerializer().serializeToString(svg)
-                      const canvas = document.createElement('canvas')
-                      const ctx = canvas.getContext('2d')!
-                      const img = new Image()
-                      const padding = 32
-                      const size = 180 + padding * 2
-                      canvas.width = size
-                      canvas.height = size
-                      img.onload = () => {
-                        ctx.fillStyle = '#ffffff'
-                        ctx.fillRect(0, 0, size, size)
-                        ctx.drawImage(img, padding, padding)
-                        const link = document.createElement('a')
-                        link.download = `${existingProfile.ensName}-payment-qr.png`
-                        link.href = canvas.toDataURL('image/png')
-                        link.click()
-                      }
-                      img.src = 'data:image/svg+xml;base64,' + btoa(svgData)
+                      const paymentUrl = `${window.location.origin}/send/${existingProfile.ensName}`
+                      const text = `I just set up my @ENSRouter profile!\n\nYou can now send me cross-chain USDC payments by scanning my QR code or clicking the link below.\n\n${paymentUrl}`
+                      window.open(
+                        `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
+                        '_blank',
+                        'noopener,noreferrer'
+                      )
                     }}
-                    className="h-9 px-4 rounded-lg text-xs font-medium bg-white/10 border border-white/10 text-white/70 hover:bg-white/20"
+                    className="w-full mt-3 h-11 rounded-full text-sm font-medium bg-white text-black hover:bg-white/90 flex items-center justify-center gap-2 transition-all duration-300 hover:scale-105"
                   >
-                    <Download className="w-4 h-4 mr-1.5" />
-                    Download QR
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                    Share on X
                   </Button>
-                </div>
-              )}
+                  <p className="text-xs text-white/30 mt-2 text-center">
+                    Tip: Download the QR code first, then attach it to your post
+                  </p>
+                </CardContent>
+              </Card>
 
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-black/30 border border-white/10 rounded-lg px-4 py-3 font-mono text-sm text-[#c084fc] truncate">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/send/${existingProfile.ensName}` : `/send/${existingProfile.ensName}`}
-                </div>
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3">
                 <Button
-                  type="button"
-                  onClick={() => {
-                    const url = `${window.location.origin}/send/${existingProfile.ensName}`
-                    navigator.clipboard.writeText(url)
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 2000)
-                  }}
-                  className={`h-12 w-12 rounded-lg flex-shrink-0 ${copied ? 'bg-emerald-500/20 border-emerald-500/30' : 'bg-white/10 border-white/10'} border`}
+                  onClick={() => setIsEditing(true)}
+                  className="flex-1 bg-white text-black hover:bg-white/90 font-semibold text-base h-14 rounded-full group transition-all duration-300 hover:scale-105"
                 >
-                  {copied ? (
-                    <Check className="w-4 h-4 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-4 h-4 text-white/70" />
-                  )}
+                  <Edit2 className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform" />
+                  Edit Profile
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="flex-1 border-white/30 text-white hover:bg-white/10 hover:border-white/50 font-semibold text-base h-14 rounded-full bg-transparent transition-all duration-300"
+                >
+                  <a href="/send" className="flex items-center justify-center gap-2">
+                    Send Payment
+                    <ArrowRight className="w-5 h-5" />
+                  </a>
                 </Button>
               </div>
-              {copied && (
-                <p className="text-xs text-emerald-400 mt-2">Copied to clipboard!</p>
-              )}
-
-              {/* Share on X */}
-              <Button
-                type="button"
-                onClick={() => {
-                  const paymentUrl = `${window.location.origin}/send/${existingProfile.ensName}`
-                  const text = `I just set up my @ENSRouter profile!\n\nYou can now send me cross-chain USDC payments by scanning my QR code or clicking the link below.\n\n${paymentUrl}`
-                  window.open(
-                    `https://x.com/intent/post?text=${encodeURIComponent(text)}`,
-                    '_blank',
-                    'noopener,noreferrer'
-                  )
-                }}
-                className="w-full mt-3 h-11 rounded-lg text-sm font-medium bg-white text-black hover:bg-white/90 flex items-center justify-center gap-2"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-                Share on X
-              </Button>
-              <p className="text-xs text-white/30 mt-2 text-center">
-                Tip: Download the QR code first, then attach it to your post
-              </p>
-            </CardContent>
-          </Card>
-
-          <div className="flex gap-3">
-            <Button
-              onClick={() => setIsEditing(true)}
-              className="flex-1 bg-white text-black hover:bg-white/90 font-bold text-lg h-14 rounded-xl group"
-            >
-              <Edit2 className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform" />
-              Edit Profile
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="flex-1 bg-white/5 border-white/10 text-white hover:bg-white/10 font-bold text-lg h-14 rounded-xl"
-            >
-              <a href="/send" className="flex items-center justify-center gap-2">
-                Send Payment
-                <ArrowRight className="w-5 h-5" />
-              </a>
-            </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -483,10 +405,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-black">
-      <div className="fixed inset-0 z-0">
+    <div className="relative min-h-screen bg-black text-white overflow-x-hidden">
+      <div className="absolute inset-0 z-0">
         <Dither
-          waveColor={[0.25, 0.25, 0.25]}
+          waveColor={[0.5, 0.5, 0.5]}
           disableAnimation={false}
           enableMouseInteraction
           mouseRadius={0.3}
@@ -497,20 +419,21 @@ export default function ProfilePage() {
         />
       </div>
 
-      <div className="fixed inset-0 bg-black/60 z-0 pointer-events-none" />
+      <ENSNavbar />
 
-      <div className="relative z-10 container mx-auto max-w-5xl px-4 py-8">
-        <div className="mb-6 text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            <span className="text-xs font-medium text-white/60 tracking-wider uppercase">
+      <div className="relative z-10 container mx-auto max-w-5xl px-4 pt-28 pb-12">
+        <div className="mb-10 text-center">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm mb-6">
+            <span className="w-2 h-2 rounded-full bg-[#a3e635]" />
+            <span className="text-xs font-medium text-white/70 tracking-widest uppercase">
               {hasProfile ? 'Edit Profile' : 'Setup Profile'}
             </span>
           </div>
-          <h1 className="text-3xl md:text-4xl font-black text-white mb-2 tracking-tight">
-            {hasProfile ? 'Update' : 'Set Up'} Your <span className="text-[#c084fc]">Profile</span>
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter leading-[0.9] mb-4">
+            <span className="text-white">{hasProfile ? 'Update' : 'Set Up'} Your </span>
+            <span className="text-[#a3e635]">Profile</span>
           </h1>
-          <p className="text-white/40">
+          <p className="text-lg text-white/60 max-w-xl mx-auto font-normal">
             Configure your payment preferences once, use everywhere
           </p>
         </div>
@@ -520,7 +443,7 @@ export default function ProfilePage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
                 {/* ENS Name */}
-                <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Card className={`bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
                   <CardContent className="p-4">
                     <label className="block text-sm font-medium text-white/80 mb-2">
                       ENS Name <span className="text-red-400">*</span>
@@ -540,7 +463,7 @@ export default function ProfilePage() {
                 </Card>
 
                 {/* Destination Chain */}
-                <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Card className={`bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
                   <CardContent className="p-4">
                     <label className="block text-sm font-medium text-white/80 mb-2">
                       Destination Chain
@@ -554,7 +477,7 @@ export default function ProfilePage() {
               </div>
 
               {/* Token Allocation */}
-              <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Card className={`bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -590,13 +513,13 @@ export default function ProfilePage() {
               </Card>
 
               {/* Slippage */}
-              <Card className={`bg-white/5 border-white/10 backdrop-blur-md ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
+              <Card className={`bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl ${isWriting ? 'opacity-50 pointer-events-none' : ''}`}>
                 <CardContent className="p-4">
                   <div className="flex justify-between items-center mb-2">
                     <label className="text-sm font-medium text-white/80">
                       Slippage Tolerance
                     </label>
-                    <span className="text-xl font-bold text-[#c084fc]">{slippageTolerance}%</span>
+                    <span className="text-xl font-bold text-[#a3e635]">{slippageTolerance}%</span>
                   </div>
                   <input
                     type="range"
@@ -606,7 +529,7 @@ export default function ProfilePage() {
                     value={slippageTolerance}
                     disabled={isWriting}
                     onChange={(e) => setValue('slippageTolerance', parseFloat(e.target.value), { shouldValidate: true })}
-                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#c084fc]"
+                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#a3e635]"
                   />
                   <div className="flex justify-between text-xs text-white/30 mt-1">
                     <span>1%</span>
@@ -619,7 +542,7 @@ export default function ProfilePage() {
                 <Button
                   type="submit"
                   disabled={isWriting || totalAllocation !== 100}
-                  className="w-full bg-white text-black hover:bg-white/90 font-bold text-lg h-12 rounded-xl disabled:opacity-50"
+                  className="w-full bg-white text-black hover:bg-white/90 font-semibold text-lg h-12 rounded-full disabled:opacity-50 transition-all duration-300 hover:scale-105"
                 >
                   {isWriting ? (
                     <span className="flex items-center gap-2">
@@ -651,16 +574,16 @@ export default function ProfilePage() {
 
           {/* Preview Panel */}
           <div className="lg:col-span-1">
-            <div className="sticky top-8">
-              <Card className="bg-white/5 border-white/10 backdrop-blur-md shadow-xl">
+            <div className="sticky top-28">
+              <Card className="bg-white/5 border border-white/10 backdrop-blur-sm rounded-2xl shadow-xl">
                 <CardContent className="p-6">
-                  <div className="text-xs font-medium text-white/50 uppercase tracking-wider mb-4">
+                  <div className="text-xs font-medium text-white/50 uppercase tracking-widest mb-4">
                     Preview
                   </div>
 
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#c084fc] to-[#8b5cf6] flex items-center justify-center text-2xl font-bold text-white">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#a3e635] to-emerald-400 flex items-center justify-center text-2xl font-bold text-black">
                         {ensNameValue ? ensNameValue[0].toUpperCase() : '?'}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -680,7 +603,7 @@ export default function ProfilePage() {
                           <div key={i} className="flex items-center gap-2">
                             <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                               <div
-                                className="h-full bg-[#c084fc] rounded-full"
+                                className="h-full bg-[#a3e635] rounded-full"
                                 style={{ width: `${alloc.percentage}%` }}
                               />
                             </div>
@@ -695,7 +618,7 @@ export default function ProfilePage() {
                     <div className="pt-3 border-t border-white/10 space-y-2">
                       <div className="flex justify-between text-xs">
                         <span className="text-white/50">Slippage</span>
-                        <span className="text-[#c084fc] font-medium">{slippageTolerance}%</span>
+                        <span className="text-[#a3e635] font-medium">{slippageTolerance}%</span>
                       </div>
                     </div>
                   </div>
@@ -705,8 +628,8 @@ export default function ProfilePage() {
               {hasProfile && (
                 <Button
                   onClick={() => setIsEditing(false)}
-                  variant="ghost"
-                  className="w-full mt-4 text-white/50 hover:text-white hover:bg-white/5"
+                  variant="outline"
+                  className="w-full mt-4 border-white/30 text-white hover:bg-white/10 hover:border-white/50 rounded-full bg-transparent transition-all duration-300"
                 >
                   Cancel
                 </Button>

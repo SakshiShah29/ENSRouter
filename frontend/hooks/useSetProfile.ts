@@ -1,8 +1,10 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useAccount, useSwitchChain } from 'wagmi'
 import { namehash } from 'viem/ens'
 import { encodeFunctionData } from 'viem'
 import type { ProfileFormData, TokenAllocation } from '@/types'
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
 
 const ENS_PUBLIC_RESOLVER = '0xF29100983E058B709F3D539b0c765937B804AC15'
 const ENS_CHAIN_ID = 1
@@ -47,8 +49,9 @@ function encodeSingleSetText(node: `0x${string}`, key: string, value: string) {
 export function useSetProfile() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isWriting, setIsWriting] = useState(false)
-  const { chain: currentChain } = useAccount()
+  const { chain: currentChain, address } = useAccount()
   const { switchChainAsync } = useSwitchChain()
+  const pendingFormData = useRef<ProfileFormData | null>(null)
 
   const {
     writeContractAsync,
@@ -69,10 +72,32 @@ export function useSetProfile() {
   useEffect(() => {
     if (isSuccess && isWriting) {
       console.log('Transaction confirmed!')
+      // Register user on backend after on-chain confirmation
+      const formData = pendingFormData.current
+      if (formData && address) {
+        fetch(`${API_URL}/api/ens/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ensName: formData.ensName,
+            ethAddress: address,
+          }),
+        })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Backend registration successful:', data)
+          })
+          .catch(err => {
+            console.error('Backend registration failed:', err)
+          })
+          .finally(() => {
+            pendingFormData.current = null
+          })
+      }
       setIsWriting(false)
       setCurrentStep(0)
     }
-  }, [isSuccess, isWriting])
+  }, [isSuccess, isWriting, address])
 
   useEffect(() => {
     if (receiptError && isWriting) {
@@ -105,6 +130,7 @@ export function useSetProfile() {
       throw new Error(`Token allocations must sum to 100% (currently ${totalPercentage}%)`)
     }
 
+    pendingFormData.current = data
     resetWrite()
     setIsWriting(true)
     setCurrentStep(1)

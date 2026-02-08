@@ -26,11 +26,11 @@ for (const envVar of requiredEnvVars) {
   }
 }
 
-// ENS resolution uses Sepolia RPC
+// ENS resolution RPC
 const ENS_RPC_URL =
   process.env.ENS_RPC_URL ||
-  process.env.SEPOLIA_RPC_URL ||
-  'https://rpc.sepolia.org';
+  process.env.ETHEREUM_RPC_URL ||
+  'https://eth.llamarpc.com';
 
 // Initialize services
 const ensService = new ENSService(ENS_RPC_URL);
