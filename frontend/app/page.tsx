@@ -4,22 +4,30 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import Dither from '@/components/Dither'
 import { ArrowRight, Zap, Shield, Globe, Wallet } from 'lucide-react'
+import { ENSNavbar } from '@/components/ui/ENSNavbar'
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-black text-white overflow-x-hidden">
-      {/* Hero Section - Full Height Dither */}
+   <main className="min-h-screen bg-black text-white overflow-x-hidden">
+      {/* Hero Section with Dither - Full Screen */}
       <div className="relative h-screen w-full">
-        <Dither
-          waveColor={[0.5, 0.5, 0.5]}
-          disableAnimation={false}
-          enableMouseInteraction
-          mouseRadius={0.3}
-          colorNum={4}
-          waveAmplitude={0.3}
-          waveFrequency={3}
-          waveSpeed={0.05}
-        />
+        {/* Dither Background - Now at z-0 so navbar appears on top */}
+        <div className="absolute inset-0 z-0">
+          <Dither
+            waveColor={[0.5, 0.5, 0.5]}
+            disableAnimation={false}
+            enableMouseInteraction
+            mouseRadius={0.3}
+            colorNum={4}
+            waveAmplitude={0.3}
+            waveFrequency={3}
+            waveSpeed={0.05}
+          />
+        </div>
+        
+        {/* Navbar - Floating on top of dither with z-50 */}
+        <ENSNavbar />
+        
         
         {/* Overlay Content */}
         <div className="absolute inset-0 flex flex-col items-center justify-center px-4 z-10">
