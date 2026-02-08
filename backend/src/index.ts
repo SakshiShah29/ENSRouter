@@ -18,7 +18,7 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 
 // Validate required env vars
-const requiredEnvVars = ['MONGODB_URI', 'TELEGRAM_BOT_TOKEN', 'WEBHOOK_SECRET', 'ETHEREUM_RPC_URL'];
+const requiredEnvVars = ['MONGODB_URI', 'TELEGRAM_BOT_TOKEN', 'WEBHOOK_SECRET', 'ETHEREUM_RPC_URL', 'BACKEND_URL'];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.error(`Missing required environment variable: ${envVar}`);
@@ -61,7 +61,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api', createRoutes(webhookService, ensService));
+app.use('/api', createRoutes(webhookService, ensService, telegramService));
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -86,10 +86,9 @@ const startServer = async () => {
       console.log(`[${new Date().toISOString()}] Server running on port ${PORT}`);
     });
 
-    // Start Telegram bot
-    console.log('Starting Telegram bot...');
-    await telegramService.start();
-    console.log('Telegram bot started');
+    // Start Telegram bot via webhook
+    console.log('Setting up Telegram webhook...');
+    await telegramService.setWebhook(process.env.BACKEND_URL!);
 
     // Start notification processor
     startNotificationProcessor();
@@ -123,7 +122,7 @@ const startNotificationProcessor = () => {
 // Graceful shutdown
 const gracefulShutdown = async (signal: string) => {
   console.log(`\n${signal} received. Shutting down...`);
-  telegramService.stop();
+  await telegramService.stop();
   await disconnectDatabase();
   process.exit(0);
 };

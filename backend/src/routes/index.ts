@@ -2,18 +2,22 @@ import { Router } from 'express';
 import { createWebhookRouter } from './webhook';
 import { createENSRouter } from './ens';
 import { createTransactionRouter } from './transaction';
+import { createTelegramRouter } from './telegram';
 import { WebhookService } from '../services/WebhookService';
 import { ENSService } from '../services/ENSService';
+import { TelegramService } from '../services/TelegramService';
 
 export const createRoutes = (
   webhookService: WebhookService,
-  ensService: ENSService
+  ensService: ENSService,
+  telegramService: TelegramService
 ): Router => {
   const router = Router();
 
   router.use('/webhook', createWebhookRouter(webhookService));
   router.use('/ens', createENSRouter(ensService));
   router.use('/transactions', createTransactionRouter());
+  router.use('/telegram', createTelegramRouter(telegramService));
 
   return router;
 };

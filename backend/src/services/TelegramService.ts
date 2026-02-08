@@ -44,44 +44,49 @@ export class TelegramService {
   }
 
   /**
-   * Start the bot
+   * Set up webhook mode
    */
-  async start(): Promise<void> {
-    if (this.isRunning) return;
-
+  async setWebhook(backendUrl: string): Promise<void> {
     try {
-      // Register bot commands with Telegram so they appear in the menu with descriptions
-      await this.bot.telegram.setMyCommands([
-        { command: 'start', description: 'Start the bot and see how to receive USDC payment notifications across chains' },
-        { command: 'link', description: 'Link your ENS name (e.g. vitalik.eth) to receive payment alerts' },
-        { command: 'unlink', description: 'Disconnect your ENS from this Telegram account' },
-        { command: 'status', description: 'Check the status of a payment (e.g. /status tx_123)' },
-        { command: 'help', description: 'Show available commands and usage' },
-      ]);
-
-      // Use polling for simplicity (use webhooks in production)
-      await this.bot.launch();
+      await this.registerCommands();
+      const webhookUrl = `${backendUrl}/api/telegram/webhook`;
+      await this.bot.telegram.setWebhook(webhookUrl);
       this.isRunning = true;
-
-      console.log('Telegram bot started successfully');
-
-      // Enable graceful stop
-      process.once('SIGINT', () => this.stop());
-      process.once('SIGTERM', () => this.stop());
+      console.log(`Telegram bot webhook set: ${webhookUrl}`);
     } catch (error) {
-      console.error('Failed to start Telegram bot:', error);
+      console.error('Failed to set Telegram webhook:', error);
       throw error;
     }
   }
 
   /**
+   * Get Express middleware for handling Telegram webhook updates
+   */
+  getWebhookCallback() {
+    return this.bot.webhookCallback('/');
+  }
+
+  /**
+   * Register bot commands with Telegram
+   */
+  private async registerCommands(): Promise<void> {
+    await this.bot.telegram.setMyCommands([
+      { command: 'start', description: 'Start the bot and see how to receive USDC payment notifications across chains' },
+      { command: 'link', description: 'Link your ENS name (e.g. vitalik.eth) to receive payment alerts' },
+      { command: 'unlink', description: 'Disconnect your ENS from this Telegram account' },
+      { command: 'status', description: 'Check the status of a payment (e.g. /status tx_123)' },
+      { command: 'help', description: 'Show available commands and usage' },
+    ]);
+  }
+
+  /**
    * Stop the bot
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.isRunning) return;
-    
+
     try {
-      this.bot.stop('SIGTERM');
+      await this.bot.telegram.deleteWebhook();
       this.isRunning = false;
       console.log('Telegram bot stopped');
     } catch (error) {
