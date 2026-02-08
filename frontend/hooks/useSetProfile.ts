@@ -1,7 +1,9 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
 import { namehash } from 'viem/ens'
 import { encodeFunctionData } from 'viem'
+import { registerENSProfile } from '@/lib/api'
+
 import type { ProfileFormData, ChainAllocation } from '@/types'
 
 const ENS_PUBLIC_RESOLVER_SEPOLIA = '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5'
@@ -51,7 +53,10 @@ function encodeSingleSetText(node: `0x${string}`, key: string, value: string) {
 export function useSetProfile() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isWriting, setIsWriting] = useState(false)
-  const { chain: currentChain } = useAccount()
+
+  const lastProfileDataRef = useRef<ProfileFormData | null>(null)
+  const { chain: currentChain, address } = useAccount()
+
 
   const {
     writeContractAsync,
@@ -71,7 +76,7 @@ export function useSetProfile() {
 
   useEffect(() => {
     if (isSuccess && isWriting) {
-      console.log('Transaction confirmed!')
+      lastProfileDataRef.current = null
       setIsWriting(false)
       setCurrentStep(0)
     }
@@ -109,6 +114,7 @@ export function useSetProfile() {
     }
 
     resetWrite()
+    lastProfileDataRef.current = data
     setIsWriting(true)
     setCurrentStep(1)
 
@@ -146,6 +152,13 @@ export function useSetProfile() {
       })
 
       console.log('Transaction hash received:', hash)
+      if (address) {
+        console.log('Registering ENS profile with backend...', { ensName: data.ensName })
+        registerENSProfile({ ensName: data.ensName, ethAddress: address })
+          .then(() => console.log('ENS profile registered with server'))
+          .catch((err) => console.error('Backend ENS register failed:', err))
+      }
+
 
     } catch (error) {
       console.error('Error in setProfile:', error)
@@ -153,7 +166,7 @@ export function useSetProfile() {
       setCurrentStep(0)
       throw error
     }
-  }, [writeContractAsync, resetWrite, currentChain])
+  }, [writeContractAsync, resetWrite, currentChain, address])
 
   const finalIsWriting = isWriting || isWritePending || isConfirming
 
