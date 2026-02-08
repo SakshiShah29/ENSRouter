@@ -2,11 +2,10 @@ import { Button } from '@/components/ui/button'
 import { TokenSelector } from '@/components/TokenSelector'
 import { getAvailableTokens } from '@/lib/tokenList'
 import { X, Plus } from 'lucide-react'
-import type { TokenAllocation } from '@/types'
 
 interface AllocationSlidersProps {
-  allocations: TokenAllocation[]
-  onChange: (allocations: TokenAllocation[]) => void
+  allocations: any[]
+  onChange: (allocations: any[]) => void
   chain: string
   disabled?: boolean
 }
