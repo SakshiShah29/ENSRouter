@@ -4,15 +4,14 @@ import { useAccount } from 'wagmi'
 import type { ParsedProfile, ChainAllocation, SupportedChain } from '@/types'
 import { SUPPORTED_CHAINS } from '@/types'
 
-const IS_TESTNET = true
-const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1
+const ENS_CHAIN_ID = 1
 
 // Parse chain allocations from text record
-// Format: "base-sepolia:80,arbitrum-sepolia:10,arc-testnet:10"
+// Format: "base:80,arbitrum:10,ethereum:10"
 function parseChainAllocations(raw: string | undefined): ChainAllocation[] {
   if (!raw || raw === '') {
-    // Default: 100% on base-sepolia
-    return [{ chain: 'base-sepolia', percentage: 100 }]
+    // Default: 100% on base
+    return [{ chain: 'base', percentage: 100 }]
   }
 
   try {
@@ -38,10 +37,10 @@ function parseChainAllocations(raw: string | undefined): ChainAllocation[] {
       console.warn('Chain allocation percentages do not sum to 100:', total, raw)
     }
 
-    return allocations.length > 0 ? allocations : [{ chain: 'base-sepolia', percentage: 100 }]
+    return allocations.length > 0 ? allocations : [{ chain: 'base', percentage: 100 }]
   } catch (error) {
     console.error('Failed to parse chain allocations:', raw, error)
-    return [{ chain: 'base-sepolia', percentage: 100 }]
+    return [{ chain: 'base', percentage: 100 }]
   }
 }
 

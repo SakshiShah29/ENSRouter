@@ -1,5 +1,4 @@
 // Token list with logos for different chains
-// Using Sepolia testnet addresses
 
 export interface Token {
   symbol: string
@@ -8,55 +7,7 @@ export interface Token {
   address?: string
 }
 
-// Base Sepolia testnet tokens
-export const BASE_SEPOLIA_TOKENS: Token[] = [
-  {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg',
-    address: '0x036CbD53842c5426634e7929541eC2318f3dCF7e', // Base Sepolia USDC
-  },
-  {
-    symbol: 'ETH',
-    name: 'Ethereum',
-    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-  },
-  {
-    symbol: 'WETH',
-    name: 'Wrapped Ether',
-    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-    address: '0x4200000000000000000000000000000000000006', // Base Sepolia WETH
-  },
-]
-
-// Ethereum Sepolia testnet tokens
-export const SEPOLIA_TOKENS: Token[] = [
-  {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg',
-    address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
-  },
-  {
-    symbol: 'ETH',
-    name: 'Ethereum',
-    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-  },
-  {
-    symbol: 'WETH',
-    name: 'Wrapped Ether',
-    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-    address: '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9', // Sepolia WETH
-  },
-  {
-    symbol: 'DAI',
-    name: 'Dai Stablecoin',
-    logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg',
-    address: '0x68194a729C2450ad26072b3D33ADaCbcef39D574', // Sepolia DAI
-  },
-]
-
-// Base Mainnet tokens (for production)
+// Base Mainnet tokens
 export const BASE_TOKENS: Token[] = [
   {
     symbol: 'USDC',
@@ -186,12 +137,6 @@ export const POLYGON_TOKENS: Token[] = [
 
 export function getAvailableTokens(chain: string): Token[] {
   switch (chain.toLowerCase()) {
-    case 'base-sepolia':
-    case 'basesepolia':
-      return BASE_SEPOLIA_TOKENS
-    case 'sepolia':
-    case 'ethereum-sepolia':
-      return SEPOLIA_TOKENS
     case 'base':
       return BASE_TOKENS
     case 'optimism':
@@ -204,6 +149,6 @@ export function getAvailableTokens(chain: string): Token[] {
     case 'matic':
       return POLYGON_TOKENS
     default:
-      return BASE_SEPOLIA_TOKENS // Default to testnet
+      return BASE_TOKENS
   }
 }

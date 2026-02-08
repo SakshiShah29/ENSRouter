@@ -52,7 +52,15 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
           {needsBridge && (
             <div className="flex justify-between text-sm">
               <span className="text-gray-600">Est. Delivery:</span>
-              <span className="font-medium">~8–20 seconds (fast)</span>
+              <span className="font-medium">
+                {estimateLoading
+                  ? 'Estimating...'
+                  : estimate?.estimatedTime
+                    ? estimate.estimatedTime < 60
+                      ? `~${estimate.estimatedTime}s`
+                      : `~${Math.ceil(estimate.estimatedTime / 60)} min`
+                    : '~2-5 min'}
+              </span>
             </div>
           )}
 

@@ -1,14 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { BridgeKit } from '@circle-fin/bridge-kit'
-import { useEvmAdapter } from './useEvmAdapter'
-import { BRIDGE_KIT_CHAINS } from '@/lib/contracts'
+import { useAccount } from 'wagmi'
+import { parseUnits } from 'viem'
+import { getQuote } from '@lifi/sdk'
+import { CHAIN_USDC_ADDRESS } from '@/lib/contracts'
+import { CHAIN_KEY_TO_CHAIN_ID } from '@/lib/lifi'
 import type { BridgeEstimate } from '@/types'
 
-const kit = new BridgeKit()
-
 interface UseBridgeEstimateParams {
-  sourceChain: string   // Our chain ID string (e.g. "base-sepolia")
-  destChain: string     // Our chain ID string (e.g. "arbitrum-sepolia")
+  sourceChain: string   // Our chain key (e.g. "base")
+  destChain: string     // Our chain key (e.g. "arbitrum")
   amount: string        // Human-readable USDC amount (e.g. "100.00")
   enabled?: boolean
 }
@@ -19,38 +19,58 @@ export function useBridgeEstimate({
   amount,
   enabled = true,
 }: UseBridgeEstimateParams) {
-  const { evmAdapter, isReady } = useEvmAdapter()
+  const { address } = useAccount()
 
-  const fromChain = BRIDGE_KIT_CHAINS[sourceChain]
-  const toChain = BRIDGE_KIT_CHAINS[destChain]
+  const fromChainId = CHAIN_KEY_TO_CHAIN_ID[sourceChain]
+  const toChainId = CHAIN_KEY_TO_CHAIN_ID[destChain]
+  const fromToken = CHAIN_USDC_ADDRESS[sourceChain]
+  const toToken = CHAIN_USDC_ADDRESS[destChain]
 
   return useQuery<BridgeEstimate>({
     queryKey: ['bridge-estimate', sourceChain, destChain, amount],
     queryFn: async () => {
-      if (!evmAdapter || !fromChain || !toChain) {
-        throw new Error('Adapter not ready or invalid chains')
+      if (!address || !fromToken || !toToken) {
+        throw new Error('Missing parameters for estimate')
       }
 
-      const estimate = await kit.estimate({
-        from: { adapter: evmAdapter, chain: fromChain as any },
-        to: { adapter: evmAdapter, chain: toChain as any },
-        amount,
+      const amountWei = parseUnits(amount, 6).toString()
+
+      const quote = await getQuote({
+        fromChain: fromChainId,
+        toChain: toChainId,
+        fromToken,
+        toToken,
+        fromAmount: amountWei,
+        fromAddress: address,
+        toAddress: address,
+        slippage: 0.005,
       })
 
-      // Bridge Kit fast transfer: ~8-20s, standard: ~15-19min
-      // Default to fast transfer estimate
-      const estimatedTime = 20
+      const fees = [
+        ...(quote.estimate.feeCosts ?? []).map(f => ({
+          type: f.name,
+          amount: f.amountUSD ? `$${parseFloat(f.amountUSD).toFixed(2)}` : f.amount,
+        })),
+        ...(quote.estimate.gasCosts ?? [])
+          .filter(g => g.type === 'SUM' || g.type === 'SEND')
+          .map(g => ({
+            type: `Gas (${g.type})`,
+            amount: g.amountUSD ? `$${parseFloat(g.amountUSD).toFixed(2)}` : g.amount,
+          })),
+      ]
 
       return {
-        fees: (estimate as any).fees ?? [],
-        estimatedTime,
+        fees: fees.length > 0 ? fees : [{ type: 'Bridge', amount: 'Included' }],
+        estimatedTime: quote.estimate.executionDuration,
       }
     },
     enabled:
       enabled &&
-      isReady &&
-      !!fromChain &&
-      !!toChain &&
+      !!address &&
+      !!fromChainId &&
+      !!toChainId &&
+      !!fromToken &&
+      !!toToken &&
       !!amount &&
       parseFloat(amount) > 0 &&
       sourceChain !== destChain,

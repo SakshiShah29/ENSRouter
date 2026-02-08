@@ -1,9 +1,10 @@
-// Supported chains for USDC allocation (Circle CCTP supported testnets)
+// Supported chains for USDC allocation
 export const SUPPORTED_CHAINS = [
-  'ethereum-sepolia',
-  'base-sepolia',
-  'arbitrum-sepolia',
-  'arc-testnet',
+  'ethereum',
+  'base',
+  'arbitrum',
+  'polygon',
+  'optimism',
 ] as const
 
 export type SupportedChain = typeof SUPPORTED_CHAINS[number]
@@ -17,7 +18,7 @@ export interface ChainAllocation {
 export interface ParsedProfile {
   ensName: string
   address: `0x${string}`
-  chainAllocations: ChainAllocation[] // e.g., [{chain: 'base-sepolia', percentage: 80}, {chain: 'arbitrum-sepolia', percentage: 20}]
+  chainAllocations: ChainAllocation[] // e.g., [{chain: 'base', percentage: 80}, {chain: 'arbitrum', percentage: 20}]
   fallbackChain?: SupportedChain
 }
 
@@ -25,9 +26,8 @@ export interface ParsedProfile {
 export type PaymentStatus =
   | 'pending'
   | 'approving'
-  | 'burning'
-  | 'attesting'
-  | 'minting'
+  | 'sending'
+  | 'bridging'
   | 'processing'
   | 'completed'
   | 'failed'
@@ -43,25 +43,29 @@ export interface PaymentStep {
   description?: string
   chain?: string // Which chain this step is for
   amount?: string // Amount for this specific step
+  substatus?: string // LI.FI substatus for progress detail
+  message?: string   // Human-readable progress message
 }
 
-// Bridge step from Circle Bridge Kit
+// Bridge step from LI.FI SDK execution
 export interface BridgeStep {
   name: string
   state: 'pending' | 'processing' | 'success' | 'error'
   txHash?: string
   explorerUrl?: string
   error?: string
-  data?: Record<string, unknown>
+  substatus?: string   // LI.FI substatus (e.g. 'WAIT_SOURCE_CONFIRMATIONS', 'WAIT_DESTINATION_TRANSACTION', 'BRIDGE_NOT_AVAILABLE')
+  message?: string     // Human-readable progress message from LI.FI
+  processType?: string // Raw LI.FI process type (TOKEN_ALLOWANCE, SWAP, CROSS_CHAIN, RECEIVING_CHAIN)
 }
 
-// Bridge result from Circle Bridge Kit
+// Bridge result from LI.FI SDK execution
 export interface BridgeResult {
   state: 'success' | 'error' | 'pending'
   steps: BridgeStep[]
 }
 
-// Bridge estimate from Circle Bridge Kit
+// Bridge estimate from LI.FI SDK
 export interface BridgeEstimate {
   fees: Array<{
     type: string

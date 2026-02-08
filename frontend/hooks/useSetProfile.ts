@@ -1,15 +1,11 @@
 import { useState, useCallback, useEffect } from 'react'
-import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
+import { useWriteContract, useWaitForTransactionReceipt, useAccount, useSwitchChain } from 'wagmi'
 import { namehash } from 'viem/ens'
 import { encodeFunctionData } from 'viem'
 import type { ProfileFormData, ChainAllocation } from '@/types'
 
-const ENS_PUBLIC_RESOLVER_SEPOLIA = '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5'
-const ENS_PUBLIC_RESOLVER_MAINNET = '0xF29100983E058B709F3D539b0c765937B804AC15'
-
-const IS_TESTNET = true
-const ENS_PUBLIC_RESOLVER = IS_TESTNET ? ENS_PUBLIC_RESOLVER_SEPOLIA : ENS_PUBLIC_RESOLVER_MAINNET
-const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1
+const ENS_PUBLIC_RESOLVER = '0xF29100983E058B709F3D539b0c765937B804AC15'
+const ENS_CHAIN_ID = 1
 
 const RESOLVER_ABI = [
   {
@@ -32,7 +28,7 @@ const RESOLVER_ABI = [
   },
 ] as const
 
-// Format chain allocations as: "base-sepolia:80,arbitrum-sepolia:10,arc-testnet:10"
+// Format chain allocations as: "base:80,arbitrum:10,ethereum:10"
 function formatChainAllocations(allocations: ChainAllocation[]): string {
   return allocations
     .filter(a => a.percentage > 0)
@@ -52,6 +48,7 @@ export function useSetProfile() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isWriting, setIsWriting] = useState(false)
   const { chain: currentChain } = useAccount()
+  const { switchChainAsync } = useSwitchChain()
 
   const {
     writeContractAsync,
@@ -96,10 +93,10 @@ export function useSetProfile() {
     console.log('Current wallet chain:', currentChain?.id)
     console.log('Required chain:', ENS_CHAIN_ID)
 
-    // Check if on correct chain
+    // Auto-switch to Ethereum Mainnet if needed
     if (currentChain?.id !== ENS_CHAIN_ID) {
-      console.error(`Wrong chain! Please switch to ${IS_TESTNET ? 'Sepolia' : 'Mainnet'}`)
-      throw new Error(`Please switch to ${IS_TESTNET ? 'Sepolia' : 'Mainnet'} network`)
+      console.log('Switching to Ethereum Mainnet for ENS update...')
+      await switchChainAsync({ chainId: ENS_CHAIN_ID })
     }
 
     // Validate allocations sum to 100
@@ -120,7 +117,7 @@ export function useSetProfile() {
       console.log('Chain allocation string:', chainAllocString)
 
       // Store chain allocations as a single text record
-      // Format: "ENSRouter.chainAlloc" = "base-sepolia:80,arbitrum-sepolia:10,arc-testnet:10"
+      // Format: "ENSRouter.chainAlloc" = "base:80,arbitrum:10,ethereum:10"
       const records: { key: string; value: string }[] = [
         { key: 'ENSRouter.chainAlloc', value: chainAllocString },
       ]
@@ -153,7 +150,7 @@ export function useSetProfile() {
       setCurrentStep(0)
       throw error
     }
-  }, [writeContractAsync, resetWrite, currentChain])
+  }, [writeContractAsync, resetWrite, currentChain, switchChainAsync])
 
   const finalIsWriting = isWriting || isWritePending || isConfirming
 

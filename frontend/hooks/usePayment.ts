@@ -20,13 +20,11 @@ import type {
 // Get explorer URL for a chain
 const getExplorerUrl = (chainKey: string, txHash: string): string => {
   const explorers: Record<string, string> = {
-    'ethereum-sepolia': 'https://sepolia.etherscan.io/tx/',
-    'base-sepolia': 'https://sepolia.basescan.org/tx/',
-    'arbitrum-sepolia': 'https://sepolia.arbiscan.io/tx/',
-    'arc-testnet': 'https://testnet.arcscan.io/tx/',
     'ethereum': 'https://etherscan.io/tx/',
     'base': 'https://basescan.org/tx/',
     'arbitrum': 'https://arbiscan.io/tx/',
+    'polygon': 'https://polygonscan.com/tx/',
+    'optimism': 'https://optimistic.etherscan.io/tx/',
   }
   return `${explorers[chainKey] || 'https://etherscan.io/tx/'}${txHash}`
 }
@@ -46,13 +44,12 @@ function calculateChainAmounts(
     }))
 }
 
-// Create steps for a bridge transfer
+// Create steps for a bridge transfer (LI.FI manages steps dynamically,
+// but we pre-create expected steps for the UI)
 function createBridgeSteps(destChain: string, amount: string): PaymentStep[] {
   return [
     { name: 'Approve USDC', status: 'pending', timestamp: Date.now(), description: `Approve ${amount} USDC for bridge`, chain: destChain, amount },
-    { name: 'Burn USDC', status: 'pending', timestamp: Date.now(), description: 'Burn USDC on source chain', chain: destChain, amount },
-    { name: 'Attestation', status: 'pending', timestamp: Date.now(), description: 'Wait for Circle attestation', chain: destChain, amount },
-    { name: 'Mint USDC', status: 'pending', timestamp: Date.now(), description: `Mint USDC on ${destChain}`, chain: destChain, amount },
+    { name: 'Bridge Transfer', status: 'pending', timestamp: Date.now(), description: `Bridge USDC to ${destChain}`, chain: destChain, amount },
   ]
 }
 
@@ -206,32 +203,63 @@ export function usePayment() {
               amount: transfer.amount,
               recipientAddress: recipient.address,
               onStepUpdate: (bridgeStep: BridgeStep, stepIndex: number) => {
-                updateChainStep(i, stepIndex, {
+                // LI.FI reports steps dynamically — update existing or append new steps
+                const currentTx = txRef.current
+                const currentSteps = currentTx?.chainTransfers[i]?.steps || []
+
+                const stepUpdate: Partial<PaymentStep> = {
+                  name: bridgeStep.name,
                   status: bridgeStep.state === 'success' ? 'completed' :
                           bridgeStep.state === 'error' ? 'failed' : 'processing',
                   txHash: bridgeStep.txHash as `0x${string}` | undefined,
                   explorerUrl: bridgeStep.explorerUrl,
                   error: bridgeStep.error,
+                  substatus: bridgeStep.substatus,
+                  message: bridgeStep.message,
                   timestamp: Date.now(),
-                })
+                }
 
-                // Update status based on step
-                if (bridgeStep.state === 'success' && stepIndex < transfer.steps.length - 1) {
-                  updateChainStep(i, stepIndex + 1, { status: 'processing' })
-                  const statusMap: Record<string, PaymentStatus> = {
-                    'Burn USDC': 'burning',
-                    'Attestation': 'attesting',
-                    'Mint USDC': 'minting',
-                  }
-                  const nextStatus = statusMap[transfer.steps[stepIndex + 1]?.name]
-                  if (nextStatus) {
-                    updateTransaction({ status: nextStatus })
-                  }
+                if (stepIndex < currentSteps.length) {
+                  updateChainStep(i, stepIndex, stepUpdate)
+                } else {
+                  // New process from LI.FI — append as a new step
+                  setTransaction(prev => {
+                    if (!prev) return prev
+                    const newTransfers = [...prev.chainTransfers]
+                    const newSteps = [...newTransfers[i].steps, {
+                      name: bridgeStep.name,
+                      status: stepUpdate.status!,
+                      timestamp: Date.now(),
+                      description: bridgeStep.message || `${bridgeStep.name} in progress`,
+                      chain: transfer.chain,
+                      amount: transfer.amount,
+                      txHash: stepUpdate.txHash,
+                      explorerUrl: stepUpdate.explorerUrl,
+                      error: stepUpdate.error,
+                      substatus: bridgeStep.substatus,
+                      message: bridgeStep.message,
+                    } as PaymentStep]
+                    newTransfers[i] = { ...newTransfers[i], steps: newSteps }
+                    const newTx = { ...prev, chainTransfers: newTransfers }
+                    txRef.current = newTx
+                    return newTx
+                  })
+                }
+
+                // Update overall transaction status based on step name
+                const statusMap: Record<string, PaymentStatus> = {
+                  'Approve USDC': 'approving',
+                  'Bridge Transfer': 'bridging',
+                  'Receiving': 'bridging',
+                }
+                const stepStatus = statusMap[bridgeStep.name]
+                if (stepStatus) {
+                  updateTransaction({ status: stepStatus })
                 }
               },
             })
 
-            // Update transfer with final result
+            // Update transfer with final result from bridge steps
             const finalSteps = transfer.steps.map((step, idx) => {
               const bridgeStep = result.steps[idx]
               if (bridgeStep) {

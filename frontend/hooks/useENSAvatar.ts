@@ -2,8 +2,7 @@
 import { useEnsAvatar, useEnsText } from 'wagmi'
 import { normalize } from 'viem/ens'
 
-const IS_TESTNET = true 
-const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1 
+const ENS_CHAIN_ID = 1
 
 export function useENSAvatar(ensName?: string) {
   const { data: avatar } = useEnsAvatar({

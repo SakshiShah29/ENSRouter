@@ -18,10 +18,11 @@ import { SUPPORTED_CHAINS, type SupportedChain, type ChainAllocation } from '@/t
 
 // Chain display info
 const CHAIN_INFO: Record<SupportedChain, { name: string; color: string; icon: string }> = {
-  'ethereum-sepolia': { name: 'Ethereum Sepolia', color: 'bg-blue-500', icon: '⟠' },
-  'base-sepolia': { name: 'Base Sepolia', color: 'bg-blue-600', icon: '🔵' },
-  'arbitrum-sepolia': { name: 'Arbitrum Sepolia', color: 'bg-cyan-500', icon: '🔷' },
-  'arc-testnet': { name: 'Arc Testnet', color: 'bg-purple-500', icon: '⚡' },
+  'ethereum': { name: 'Ethereum', color: 'bg-blue-500', icon: '⟠' },
+  'base': { name: 'Base', color: 'bg-blue-600', icon: '🔵' },
+  'arbitrum': { name: 'Arbitrum', color: 'bg-cyan-500', icon: '🔷' },
+  'polygon': { name: 'Polygon', color: 'bg-purple-500', icon: '⬡' },
+  'optimism': { name: 'Optimism', color: 'bg-red-500', icon: '🔴' },
 }
 
 const chainAllocationSchema = z.object({
@@ -145,7 +146,7 @@ export default function ProfilePage() {
     mode: 'onChange',
     defaultValues: {
       ensName: '',
-      chainAllocations: [{ chain: 'base-sepolia', percentage: 100 }],
+      chainAllocations: [{ chain: 'base', percentage: 100 }],
       fallbackChain: undefined,
     },
   })

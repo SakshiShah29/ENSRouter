@@ -1,154 +1,184 @@
-import { useState, useCallback } from 'react'
-import { BridgeKit } from '@circle-fin/bridge-kit'
-import { useEvmAdapter } from './useEvmAdapter'
-import { BRIDGE_KIT_CHAINS } from '@/lib/contracts'
+import { useState, useCallback, useRef } from 'react'
+import { useAccount } from 'wagmi'
+import { parseUnits } from 'viem'
+import { getQuote, convertQuoteToRoute, executeRoute } from '@lifi/sdk'
+import type { RouteExtended, Process } from '@lifi/sdk'
+import { CHAIN_USDC_ADDRESS } from '@/lib/contracts'
+import { CHAIN_KEY_TO_CHAIN_ID } from '@/lib/lifi'
 import { toast } from 'sonner'
 import type { BridgeResult, BridgeStep } from '@/types'
 
-const kit = new BridgeKit()
-
 interface BridgeParams {
-  sourceChain: string          // Our chain ID string (e.g. "base-sepolia")
-  destChain: string            // Our chain ID string (e.g. "arbitrum-sepolia")
+  sourceChain: string          // Our chain key (e.g. "base")
+  destChain: string            // Our chain key (e.g. "arbitrum")
   amount: string               // Human-readable USDC amount (e.g. "100.00")
   recipientAddress?: string    // Recipient wallet address on destination chain
   onStepUpdate?: (step: BridgeStep, stepIndex: number) => void
 }
 
-// Map Bridge Kit step names to our step names
-const STEP_NAME_MAP: Record<string, string> = {
-  'approve': 'Approve USDC',
-  'burn': 'Burn USDC',
-  'attestation': 'Attestation',
-  'mint': 'Mint USDC',
+// Map LI.FI process types to display names
+const PROCESS_NAME_MAP: Record<string, string> = {
+  'TOKEN_ALLOWANCE': 'Approve USDC',
+  'SWAP': 'Swap',
+  'CROSS_CHAIN': 'Bridge Transfer',
+  'RECEIVING_CHAIN': 'Receiving',
+  'PERMIT': 'Permit',
 }
 
-// Get explorer URL for a chain
-const getExplorerUrl = (chainKey: string, txHash: string): string => {
-  const explorers: Record<string, string> = {
-    'ethereum-sepolia': 'https://sepolia.etherscan.io/tx/',
-    'base-sepolia': 'https://sepolia.basescan.org/tx/',
-    'arbitrum-sepolia': 'https://sepolia.arbiscan.io/tx/',
-    'ethereum': 'https://etherscan.io/tx/',
-    'base': 'https://basescan.org/tx/',
-    'arbitrum': 'https://arbiscan.io/tx/',
+// Map LI.FI process status to our step state
+function mapProcessStatus(status: string): BridgeStep['state'] {
+  switch (status) {
+    case 'DONE': return 'success'
+    case 'FAILED': return 'error'
+    case 'STARTED':
+    case 'ACTION_REQUIRED':
+    case 'PENDING': return 'processing'
+    default: return 'pending'
   }
-  return `${explorers[chainKey] || 'https://etherscan.io/tx/'}${txHash}`
 }
 
 export function useBridgeUSDC() {
-  const { evmAdapter, isReady } = useEvmAdapter()
+  const { address } = useAccount()
   const [isPending, setIsPending] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
   const [error, setError] = useState<Error | null>(null)
   const [steps, setSteps] = useState<BridgeStep[]>([])
   const [currentStep, setCurrentStep] = useState<string | null>(null)
+  const stepsRef = useRef<BridgeStep[]>([])
+
+  const isReady = !!address
 
   const bridge = useCallback(
     async (params: BridgeParams): Promise<BridgeResult> => {
-      if (!evmAdapter) {
+      if (!address) {
         throw new Error('Wallet not connected')
       }
 
-      console.log('=== BRIDGE DEBUG ===')
-      console.log('Input sourceChain:', params.sourceChain)
-      console.log('Input destChain:', params.destChain)
+      const fromChainId = CHAIN_KEY_TO_CHAIN_ID[params.sourceChain]
+      const toChainId = CHAIN_KEY_TO_CHAIN_ID[params.destChain]
 
-      const fromChain = BRIDGE_KIT_CHAINS[params.sourceChain]
-      const toChain = BRIDGE_KIT_CHAINS[params.destChain]
-
-      if (!fromChain || !toChain) {
-        const errorMsg = `Unsupported chain: ${!fromChain ? params.sourceChain : params.destChain}`
+      if (!fromChainId || !toChainId) {
+        const errorMsg = `Unsupported chain: ${!fromChainId ? params.sourceChain : params.destChain}`
         toast.error('Chain Error', { description: errorMsg })
         throw new Error(errorMsg)
+      }
+
+      const fromToken = CHAIN_USDC_ADDRESS[params.sourceChain]
+      const toToken = CHAIN_USDC_ADDRESS[params.destChain]
+
+      if (!fromToken || !toToken) {
+        throw new Error('USDC address not configured for chain')
       }
 
       setIsPending(true)
       setIsSuccess(false)
       setError(null)
       setSteps([])
+      stepsRef.current = []
       setCurrentStep('approve')
+      const toastedProcesses = new Set<string>()
 
       try {
-        console.log('Starting bridge:', { fromChain, toChain, amount: params.amount })
-
         toast.info('Starting Bridge', {
           description: `Bridging ${params.amount} USDC from ${params.sourceChain} to ${params.destChain}`,
         })
 
-        const result = await kit.bridge({
-          from: { adapter: evmAdapter, chain: fromChain as any },
-          to: {
-            adapter: evmAdapter,
-            chain: toChain as any,
-            ...(params.recipientAddress && { recipientAddress: params.recipientAddress }),
+        const amountWei = parseUnits(params.amount, 6).toString()
+
+        // 1. Get quote from LI.FI
+        const quote = await getQuote({
+          fromChain: fromChainId,
+          toChain: toChainId,
+          fromToken,
+          toToken,
+          fromAmount: amountWei,
+          fromAddress: address,
+          toAddress: params.recipientAddress ?? address,
+          slippage: 0.005,
+        })
+
+        // 2. Convert quote to route and execute
+        const route = convertQuoteToRoute(quote)
+
+        const executedRoute: RouteExtended = await executeRoute(route, {
+          updateRouteHook(updatedRoute) {
+            // Extract all processes from all steps in the route
+            const allProcesses: Process[] = []
+            for (const step of updatedRoute.steps) {
+              if (step.execution?.process) {
+                allProcesses.push(...step.execution.process)
+              }
+            }
+
+            // Map processes to our BridgeStep format
+            const bridgeSteps: BridgeStep[] = allProcesses.map(proc => ({
+              name: PROCESS_NAME_MAP[proc.type] || proc.type,
+              state: mapProcessStatus(proc.status),
+              txHash: proc.txHash,
+              explorerUrl: proc.txLink,
+              error: proc.error?.message,
+              substatus: proc.substatus,
+              message: proc.message,
+              processType: proc.type,
+            }))
+
+            stepsRef.current = bridgeSteps
+            setSteps(bridgeSteps)
+
+            // Update current step name
+            const activeProcess = allProcesses.find(
+              p => p.status === 'PENDING' || p.status === 'ACTION_REQUIRED' || p.status === 'STARTED'
+            )
+            if (activeProcess) {
+              setCurrentStep(PROCESS_NAME_MAP[activeProcess.type] || activeProcess.type)
+            }
+
+            // Notify callback for each step
+            bridgeSteps.forEach((step, idx) => {
+              params.onStepUpdate?.(step, idx)
+            })
+
+            // Toast for completed processes (deduplicated)
+            for (const proc of allProcesses) {
+              const key = `${proc.type}:${proc.txHash || proc.startedAt}`
+              if (proc.status === 'DONE' && !toastedProcesses.has(key)) {
+                toastedProcesses.add(key)
+                const name = PROCESS_NAME_MAP[proc.type] || proc.type
+                if (proc.txHash) {
+                  toast.success(`${name} Complete`, {
+                    description: `Tx: ${proc.txHash.slice(0, 10)}...${proc.txHash.slice(-8)}`,
+                    action: proc.txLink ? {
+                      label: 'View',
+                      onClick: () => window.open(proc.txLink, '_blank'),
+                    } : undefined,
+                  })
+                }
+              }
+            }
           },
-          amount: params.amount,
         })
 
-        console.log('Bridge Kit raw result:', result)
+        // 3. Check final execution status
+        const allDone = executedRoute.steps.every(
+          s => s.execution?.status === 'DONE'
+        )
 
-        // Parse steps from Bridge Kit result
-        const rawSteps = (result as any).steps || []
-        const parsedSteps: BridgeStep[] = rawSteps.map((step: any, idx: number) => {
-          const txHash = step.txHash || step.data?.txHash
-          const stepName = STEP_NAME_MAP[step.name] || step.name
+        if (allDone) {
+          setIsSuccess(true)
+          setCurrentStep(null)
 
-          // Determine which chain this step is on
-          const isSourceChainStep = ['approve', 'burn'].includes(step.name)
-          const chainKey = isSourceChainStep ? params.sourceChain : params.destChain
+          toast.success('Bridge Complete!', {
+            description: `${params.amount} USDC bridged successfully`,
+          })
 
-          const bridgeStep: BridgeStep = {
-            name: stepName,
-            state: step.state === 'success' ? 'success' : step.state === 'error' ? 'error' : 'pending',
-            txHash: txHash,
-            explorerUrl: txHash ? (step.explorerUrl || getExplorerUrl(chainKey, txHash)) : undefined,
-            error: step.error?.message || step.errorMessage,
-            data: step.data,
+          return {
+            state: 'success',
+            steps: stepsRef.current,
           }
-
-          // Notify about step completion
-          params.onStepUpdate?.(bridgeStep, idx)
-          setCurrentStep(step.name)
-
-          if (bridgeStep.state === 'success' && bridgeStep.txHash) {
-            toast.success(`${stepName} Complete`, {
-              description: `Tx: ${bridgeStep.txHash.slice(0, 10)}...${bridgeStep.txHash.slice(-8)}`,
-              action: bridgeStep.explorerUrl ? {
-                label: 'View',
-                onClick: () => window.open(bridgeStep.explorerUrl, '_blank'),
-              } : undefined,
-            })
-          } else if (bridgeStep.state === 'error') {
-            toast.error(`${stepName} Failed`, {
-              description: bridgeStep.error || 'Unknown error',
-            })
-          }
-
-          return bridgeStep
-        })
-
-        setSteps(parsedSteps)
-
-        const bridgeResult: BridgeResult = {
-          state: (result as any).state === 'error' ? 'error' : 'success',
-          steps: parsedSteps,
-        }
-
-        if (bridgeResult.state === 'error') {
-          // Find the failed step for better error message
-          const failedStep = parsedSteps.find(s => s.state === 'error')
+        } else {
+          const failedStep = stepsRef.current.find(s => s.state === 'error')
           throw new Error(failedStep?.error || 'Bridge failed')
         }
-
-        setIsSuccess(true)
-        setCurrentStep(null)
-
-        toast.success('Bridge Complete!', {
-          description: `${params.amount} USDC bridged successfully`,
-        })
-
-        return bridgeResult
       } catch (err) {
         console.error('Bridge error:', err)
         const bridgeError = err instanceof Error ? err : new Error(String(err))
@@ -165,7 +195,7 @@ export function useBridgeUSDC() {
         setIsPending(false)
       }
     },
-    [evmAdapter]
+    [address]
   )
 
   const reset = useCallback(() => {
@@ -173,6 +203,7 @@ export function useBridgeUSDC() {
     setIsSuccess(false)
     setError(null)
     setSteps([])
+    stepsRef.current = []
     setCurrentStep(null)
   }, [])
 

@@ -13,10 +13,11 @@ interface PaymentStatusTrackerProps {
 
 // Chain display info
 const CHAIN_INFO: Record<string, { name: string; color: string; bgColor: string }> = {
-  'ethereum-sepolia': { name: 'Ethereum Sepolia', color: 'text-blue-400', bgColor: 'bg-blue-500' },
-  'base-sepolia': { name: 'Base Sepolia', color: 'text-blue-500', bgColor: 'bg-blue-600' },
-  'arbitrum-sepolia': { name: 'Arbitrum Sepolia', color: 'text-cyan-400', bgColor: 'bg-cyan-500' },
-  'arc-testnet': { name: 'Arc Testnet', color: 'text-purple-400', bgColor: 'bg-purple-500' },
+  'ethereum': { name: 'Ethereum', color: 'text-blue-400', bgColor: 'bg-blue-500' },
+  'base': { name: 'Base', color: 'text-blue-500', bgColor: 'bg-blue-600' },
+  'arbitrum': { name: 'Arbitrum', color: 'text-cyan-400', bgColor: 'bg-cyan-500' },
+  'polygon': { name: 'Polygon', color: 'text-purple-400', bgColor: 'bg-purple-500' },
+  'optimism': { name: 'Optimism', color: 'text-red-400', bgColor: 'bg-red-500' },
 }
 
 export function PaymentStatusTracker({ transaction }: PaymentStatusTrackerProps) {
@@ -105,9 +106,8 @@ function ChainTransferCard({ transfer, index }: { transfer: ChainTransfer; index
         return <span className="h-6 w-6 rounded-full bg-red-500 flex items-center justify-center text-xs text-white">✕</span>
       case 'processing':
       case 'approving':
-      case 'burning':
-      case 'attesting':
-      case 'minting':
+      case 'sending':
+      case 'bridging':
         return <span className="h-6 w-6 rounded-full border-2 border-blue-500 flex items-center justify-center text-xs text-blue-500 animate-pulse">{index + 1}</span>
       default:
         return <span className="h-6 w-6 rounded-full border-2 border-gray-600 flex items-center justify-center text-xs text-gray-500">{index + 1}</span>
@@ -166,9 +166,8 @@ function StatusBadge({ status }: { status: string }) {
   const variants: Record<string, { color: string; bg: string; label: string }> = {
     pending: { color: 'text-yellow-400', bg: 'bg-yellow-400/10', label: 'Pending' },
     approving: { color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Approving' },
-    burning: { color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Burning' },
-    attesting: { color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Attesting' },
-    minting: { color: 'text-cyan-400', bg: 'bg-cyan-400/10', label: 'Minting' },
+    sending: { color: 'text-orange-400', bg: 'bg-orange-400/10', label: 'Sending' },
+    bridging: { color: 'text-purple-400', bg: 'bg-purple-400/10', label: 'Bridging' },
     processing: { color: 'text-blue-400', bg: 'bg-blue-400/10', label: 'Processing' },
     completed: { color: 'text-green-400', bg: 'bg-green-400/10', label: 'Completed' },
     failed: { color: 'text-red-400', bg: 'bg-red-400/10', label: 'Failed' },
@@ -197,7 +196,7 @@ function StepItem({ step, index, total }: { step: PaymentStep; index: number; to
   const getExplorerUrl = () => {
     if (step?.explorerUrl) return step?.explorerUrl
     if (step.txHash) {
-      return `https://sepolia.basescan.org/tx/${step.txHash}`
+      return `https://basescan.org/tx/${step.txHash}`
     }
     return null
   }
@@ -222,9 +221,12 @@ function StepItem({ step, index, total }: { step: PaymentStep; index: number; to
           <span className="text-xs text-gray-500">{index + 1}/{total}</span>
         </div>
 
-        {step.description && (
+        {/* Show LI.FI live message when processing, otherwise show static description */}
+        {step.status === 'processing' && step.message ? (
+          <p className="text-xs text-blue-300 mt-0.5 animate-pulse">{step.message}</p>
+        ) : step.description ? (
           <p className="text-xs text-gray-400 mt-0.5">{step.description}</p>
-        )}
+        ) : null}
 
         {step.txHash && (
           <div className="flex items-center gap-2 mt-1">
