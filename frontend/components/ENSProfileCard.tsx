@@ -3,13 +3,57 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useENSAvatar, useENSHeader } from '@/hooks/useENSAvatar'
 import { formatAddress } from '@/lib/utils'
-import type { ParsedProfile } from '@/types'
+import type { ParsedProfile, ChainAllocation } from '@/types'
 import { ExternalLink, Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 
 interface ENSProfileCardProps {
   profile: ParsedProfile
   isLoading?: boolean
+}
+
+// Chain display info
+const CHAIN_INFO: Record<string, { name: string; color: string; icon: string }> = {
+  'ethereum-sepolia': { name: 'Ethereum Sepolia', color: 'bg-blue-500', icon: '⟠' },
+  'base-sepolia': { name: 'Base Sepolia', color: 'bg-blue-600', icon: '🔵' },
+  'arbitrum-sepolia': { name: 'Arbitrum Sepolia', color: 'bg-cyan-500', icon: '🔷' },
+  'arc-testnet': { name: 'Arc Testnet', color: 'bg-purple-500', icon: '⚡' },
+}
+
+function ChainAllocationBar({ allocations }: { allocations: ChainAllocation[] }) {
+  return (
+    <div className="space-y-3">
+      {/* Visual bar */}
+      <div className="flex h-4 w-full overflow-hidden rounded-full">
+        {allocations.map((alloc, idx) => {
+          const info = CHAIN_INFO[alloc.chain] || { color: 'bg-gray-500' }
+          return (
+            <div
+              key={idx}
+              className={`${info.color} transition-all`}
+              style={{ width: `${alloc.percentage}%` }}
+              title={`${alloc.chain}: ${alloc.percentage}%`}
+            />
+          )
+        })}
+      </div>
+
+      {/* Legend */}
+      <div className="flex flex-wrap gap-3">
+        {allocations.map((alloc, idx) => {
+          const info = CHAIN_INFO[alloc.chain] || { name: alloc.chain, color: 'bg-gray-500', icon: '●' }
+          return (
+            <div key={idx} className="flex items-center gap-2">
+              <div className={`h-3 w-3 rounded-full ${info.color}`} />
+              <span className="text-sm text-gray-300">
+                {info.name}: <span className="font-medium text-white">{alloc.percentage}%</span>
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
@@ -32,15 +76,14 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
       {/* Header Banner */}
       <div className="relative h-32 w-full overflow-hidden bg-gradient-to-b from-[#2d3748] to-[#1a1b1f]">
         {header ? (
-          <img 
-            src={header} 
+          <img
+            src={header}
             alt="header"
             className="h-full w-full object-cover opacity-60"
           />
         ) : (
           <div className="h-full w-full bg-gradient-to-r from-blue-900/20 to-purple-900/20" />
         )}
-        {/* Cloud pattern overlay */}
         <div className="absolute inset-0 opacity-30" style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20 50 Q30 30 50 40 T80 50' fill='none' stroke='white' stroke-width='2' opacity='0.3'/%3E%3C/svg%3E")`,
           backgroundSize: '200px 100px'
@@ -49,13 +92,13 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
 
       {/* Avatar and Main Info */}
       <div className="relative px-6 pb-6">
-        {/* Avatar - positioned to overlap header */}
+        {/* Avatar */}
         <div className="relative -mt-16 mb-4 flex items-end justify-between">
           <div className="relative">
             <div className="h-24 w-24 overflow-hidden rounded-2xl border-4 border-[#1a1b1f] bg-[#2d3748] shadow-xl">
               {avatar ? (
-                <img 
-                  src={avatar} 
+                <img
+                  src={avatar}
                   alt={profile.ensName}
                   className="h-full w-full object-cover"
                 />
@@ -66,8 +109,7 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
               )}
             </div>
           </div>
-          
-          {/* Extend Button (decorative for now) */}
+
           <button className="flex items-center gap-2 rounded-lg bg-[#2d3748] px-4 py-2 text-sm font-medium text-blue-400 transition-colors hover:bg-[#3d4758]">
             <span>▶</span> Extend
           </button>
@@ -78,7 +120,7 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
           <h1 className="text-3xl font-bold text-white mb-2">{profile.ensName}</h1>
           <Badge className="bg-green-500/20 text-green-400 border-0 hover:bg-green-500/30">
             <svg className="mr-1 h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
             Your primary name
           </Badge>
@@ -90,13 +132,13 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
           <div className="flex items-center gap-3 rounded-xl bg-[#2d3748]/50 p-3 w-fit">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#627eea]">
               <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2L2 12l10 10 10-10L12 2z"/>
+                <path d="M12 2L2 12l10 10 10-10L12 2z" />
               </svg>
             </div>
             <span className="font-mono text-sm text-gray-300">
               {formatAddress(profile.address)}
             </span>
-            <button 
+            <button
               onClick={copyAddress}
               className="text-gray-400 hover:text-white transition-colors"
             >
@@ -105,43 +147,31 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
           </div>
         </div>
 
+        {/* Chain Allocations Section */}
+        <div className="mb-6">
+          <h2 className="text-sm font-medium text-gray-400 mb-3">USDC Chain Allocations</h2>
+          <div className="rounded-xl bg-[#2d3748]/30 p-4 border border-gray-700/50">
+            <ChainAllocationBar allocations={profile.chainAllocations} />
+          </div>
+        </div>
+
         {/* Router Records Section */}
         <div>
           <h2 className="text-sm font-medium text-gray-400 mb-3">Router Records</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {/* Chain */}
-            <div className="flex items-center justify-between rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-              <span className="text-sm text-gray-400">ENSRouter.chain</span>
-              <span className="text-sm font-medium text-blue-400">{profile.chain}</span>
-            </div>
-
-            {/* Allocation */}
-            <div className="flex items-center justify-between rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-              <span className="text-sm text-gray-400">ENSRouter.alloc</span>
-              <span className="text-sm font-medium text-white">
-                {profile.allocations.map(a => `${a.token}:${a.percentage}`).join(', ')}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Chain Allocations as text */}
+            <div className="flex flex-col rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
+              <span className="text-xs text-gray-500 mb-1">ENSRouter.chainAlloc</span>
+              <span className="text-sm font-medium text-white break-all">
+                {profile.chainAllocations.map(a => `${a.chain}:${a.percentage}`).join(', ')}
               </span>
             </div>
 
-            {/* Slippage */}
-            <div className="flex items-center justify-between rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-              <span className="text-sm text-gray-400">ENSRouter.slippage</span>
-              <span className="text-sm font-medium text-white">{profile.slippageTolerance}</span>
-            </div>
-
-            {/* Autoswap */}
-            <div className="flex items-center justify-between rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-              <span className="text-sm text-gray-400">ENSRouter.autoswap</span>
-              <span className="text-sm font-medium text-green-400">
-                {profile.autoSwapEnabled ? 'true' : 'false'}
-              </span>
-            </div>
-
-            {/* Fallback */}
+            {/* Fallback Chain */}
             {profile.fallbackChain && (
-              <div className="flex items-center justify-between rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
-                <span className="text-sm text-gray-400">ENSRouter.fallback</span>
-                <span className="text-sm font-medium text-white">{profile.fallbackChain}</span>
+              <div className="flex flex-col rounded-xl bg-[#2d3748]/30 px-4 py-3 border border-gray-700/50">
+                <span className="text-xs text-gray-500 mb-1">ENSRouter.fallback</span>
+                <span className="text-sm font-medium text-blue-400">{profile.fallbackChain}</span>
               </div>
             )}
           </div>
@@ -183,33 +213,30 @@ export function ENSProfileCard({ profile, isLoading }: ENSProfileCardProps) {
 export function ENSProfileCardSkeleton() {
   return (
     <Card className="overflow-hidden border-0 bg-[#1a1b1f] text-white shadow-2xl">
-      {/* Header Skeleton */}
       <Skeleton className="h-32 w-full bg-[#2d3748]" />
-      
+
       <div className="relative px-6 pb-6">
-        {/* Avatar Skeleton */}
         <div className="relative -mt-16 mb-4 flex items-end justify-between">
           <Skeleton className="h-24 w-24 rounded-2xl border-4 border-[#1a1b1f] bg-[#2d3748]" />
           <Skeleton className="h-10 w-24 rounded-lg bg-[#2d3748]" />
         </div>
 
-        {/* Name Skeleton */}
         <Skeleton className="h-8 w-48 mb-2 bg-[#2d3748]" />
         <Skeleton className="h-6 w-32 mb-6 bg-[#2d3748]" />
 
-        {/* Address Section Skeleton */}
         <Skeleton className="h-4 w-20 mb-3 bg-[#2d3748]" />
         <Skeleton className="h-12 w-64 rounded-xl bg-[#2d3748] mb-6" />
 
-        {/* Records Grid Skeleton */}
+        <Skeleton className="h-4 w-36 mb-3 bg-[#2d3748]" />
+        <Skeleton className="h-24 w-full rounded-xl bg-[#2d3748] mb-6" />
+
         <Skeleton className="h-4 w-24 mb-3 bg-[#2d3748]" />
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          {[...Array(2)].map((_, i) => (
             <Skeleton key={i} className="h-14 rounded-xl bg-[#2d3748]" />
           ))}
         </div>
 
-        {/* Ownership Skeleton */}
         <Skeleton className="h-4 w-20 mb-3 bg-[#2d3748]" />
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[...Array(4)].map((_, i) => (

@@ -1,17 +1,24 @@
+// Supported chains for USDC allocation (Circle CCTP supported testnets)
+export const SUPPORTED_CHAINS = [
+  'ethereum-sepolia',
+  'base-sepolia',
+  'arbitrum-sepolia',
+  'arc-testnet',
+] as const
+
+export type SupportedChain = typeof SUPPORTED_CHAINS[number]
+
+// Chain allocation - how much USDC percentage on which chain
+export interface ChainAllocation {
+  chain: SupportedChain
+  percentage: number // 0-100
+}
+
 export interface ParsedProfile {
   ensName: string
   address: `0x${string}`
-  chain: string
-  allocations: TokenAllocation[]
-  slippageTolerance: number
-  autoSwapEnabled: boolean
-  fallbackChain?: string
-}
-
-// Token allocation
-export interface TokenAllocation {
-  token: string      // "USDC", "ETH", "USDT"
-  percentage: number // 0-100
+  chainAllocations: ChainAllocation[] // e.g., [{chain: 'base-sepolia', percentage: 80}, {chain: 'arbitrum-sepolia', percentage: 20}]
+  fallbackChain?: SupportedChain
 }
 
 // Payment status type
@@ -34,6 +41,8 @@ export interface PaymentStep {
   timestamp: number
   error?: string
   description?: string
+  chain?: string // Which chain this step is for
+  amount?: string // Amount for this specific step
 }
 
 // Bridge step from Circle Bridge Kit
@@ -55,35 +64,41 @@ export interface BridgeResult {
 // Bridge estimate from Circle Bridge Kit
 export interface BridgeEstimate {
   fees: Array<{
-    type: string      // "provider" | "protocol"
-    amount: string    // fee in USDC
+    type: string
+    amount: string
   }>
-  estimatedTime: number  // seconds
+  estimatedTime: number
 }
 
-// Payment transaction state
+// Chain transfer - represents a single transfer to a chain
+export interface ChainTransfer {
+  chain: SupportedChain
+  amount: string // USDC amount for this chain
+  percentage: number
+  status: PaymentStatus
+  steps: PaymentStep[]
+  bridgeResult?: BridgeResult
+}
+
+// Payment transaction state - now supports multi-chain
 export interface PaymentTransaction {
   id: string
   sender: `0x${string}`
   recipient: string
   recipientAddress: `0x${string}`
-  amountUSDC: string
+  totalAmountUSDC: string
+  sourceChain: string
   status: PaymentStatus
-  steps: PaymentStep[]
+  chainTransfers: ChainTransfer[] // Multiple chain destinations
   createdAt: number
   completedAt?: number
-  sourceChain?: string
-  destChain?: string
-  bridgeResult?: BridgeResult
 }
 
 // Form types
 export interface ProfileFormData {
   ensName: string
-  chain: string
-  allocations: TokenAllocation[]
-  slippageTolerance: number
-  autoSwapEnabled: boolean
+  chainAllocations: ChainAllocation[]
+  fallbackChain?: SupportedChain
 }
 
 export interface SendFormData {

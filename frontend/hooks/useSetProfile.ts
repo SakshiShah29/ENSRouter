@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi'
 import { namehash } from 'viem/ens'
 import { encodeFunctionData } from 'viem'
-import type { ProfileFormData } from '@/types'
+import type { ProfileFormData, ChainAllocation } from '@/types'
 
 const ENS_PUBLIC_RESOLVER_SEPOLIA = '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5'
 const ENS_PUBLIC_RESOLVER_MAINNET = '0xF29100983E058B709F3D539b0c765937B804AC15'
@@ -32,8 +32,12 @@ const RESOLVER_ABI = [
   },
 ] as const
 
-function formatAllocation(allocations: { token: string; percentage: number }[]): string {
-  return allocations.map(a => `${a.token}:${a.percentage}`).join(',')
+// Format chain allocations as: "base-sepolia:80,arbitrum-sepolia:10,arc-testnet:10"
+function formatChainAllocations(allocations: ChainAllocation[]): string {
+  return allocations
+    .filter(a => a.percentage > 0)
+    .map(a => `${a.chain}:${a.percentage}`)
+    .join(',')
 }
 
 function encodeSingleSetText(node: `0x${string}`, key: string, value: string) {
@@ -48,24 +52,23 @@ export function useSetProfile() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isWriting, setIsWriting] = useState(false)
   const { chain: currentChain } = useAccount()
-  
-  const { 
+
+  const {
     writeContractAsync,
-    data: txHash, 
+    data: txHash,
     error: writeError,
     reset: resetWrite,
     isPending: isWritePending
   } = useWriteContract()
-  
-  const { 
-    isLoading: isConfirming, 
+
+  const {
+    isLoading: isConfirming,
     isSuccess,
-    error: receiptError 
-  } = useWaitForTransactionReceipt({ 
-    hash: txHash 
+    error: receiptError
+  } = useWaitForTransactionReceipt({
+    hash: txHash
   })
 
-  // Reset state when transaction is confirmed
   useEffect(() => {
     if (isSuccess && isWriting) {
       console.log('Transaction confirmed!')
@@ -74,7 +77,6 @@ export function useSetProfile() {
     }
   }, [isSuccess, isWriting])
 
-  // Handle receipt errors
   useEffect(() => {
     if (receiptError && isWriting) {
       console.error('Receipt error:', receiptError)
@@ -83,7 +85,6 @@ export function useSetProfile() {
     }
   }, [receiptError, isWriting])
 
-  // Log write errors
   useEffect(() => {
     if (writeError) {
       console.error('Write error:', writeError)
@@ -101,6 +102,12 @@ export function useSetProfile() {
       throw new Error(`Please switch to ${IS_TESTNET ? 'Sepolia' : 'Mainnet'} network`)
     }
 
+    // Validate allocations sum to 100
+    const totalPercentage = data.chainAllocations.reduce((sum, a) => sum + a.percentage, 0)
+    if (totalPercentage !== 100) {
+      throw new Error(`Chain allocations must sum to 100% (currently ${totalPercentage}%)`)
+    }
+
     resetWrite()
     setIsWriting(true)
     setCurrentStep(1)
@@ -108,24 +115,27 @@ export function useSetProfile() {
     try {
       const node = namehash(data.ensName) as `0x${string}`
       console.log('Namehash for', data.ensName, ':', node)
-      
-      const allocString = formatAllocation(data.allocations)
-      console.log('Allocation string:', allocString)
 
-      const records = [
-        { key: 'ENSRouter.chain', value: data.chain },
-        { key: 'ENSRouter.alloc', value: allocString },
-        { key: 'ENSRouter.slippage', value: data.slippageTolerance.toString() },
-        { key: 'ENSRouter.autoswap', value: data.autoSwapEnabled.toString() },
+      const chainAllocString = formatChainAllocations(data.chainAllocations)
+      console.log('Chain allocation string:', chainAllocString)
+
+      // Store chain allocations as a single text record
+      // Format: "ENSRouter.chainAlloc" = "base-sepolia:80,arbitrum-sepolia:10,arc-testnet:10"
+      const records: { key: string; value: string }[] = [
+        { key: 'ENSRouter.chainAlloc', value: chainAllocString },
       ]
+
+      // Add fallback chain if specified
+      if (data.fallbackChain) {
+        records.push({ key: 'ENSRouter.fallback', value: data.fallbackChain })
+      }
 
       const calls = records.map(({ key, value }) =>
         encodeSingleSetText(node, key, value)
       )
-      
+
       console.log('Encoded calls:', calls)
       console.log('Resolver address:', ENS_PUBLIC_RESOLVER)
-      console.log('About to call writeContractAsync...')
 
       const hash = await writeContractAsync({
         address: ENS_PUBLIC_RESOLVER,
@@ -136,7 +146,7 @@ export function useSetProfile() {
       })
 
       console.log('Transaction hash received:', hash)
-      
+
     } catch (error) {
       console.error('Error in setProfile:', error)
       setIsWriting(false)
@@ -146,7 +156,6 @@ export function useSetProfile() {
   }, [writeContractAsync, resetWrite, currentChain])
 
   const finalIsWriting = isWriting || isWritePending || isConfirming
-  console.log('Hook state - isWriting:', isWriting, 'isWritePending:', isWritePending, 'isConfirming:', isConfirming, 'final:', finalIsWriting)
 
   return {
     setProfile,
