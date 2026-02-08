@@ -1,43 +1,59 @@
 import { useEnsAddress, useEnsText, useEnsName, useEnsAvatar } from 'wagmi'
 import { normalize } from 'viem/ens'
 import { useAccount } from 'wagmi'
-import type { ParsedProfile, TokenAllocation } from '@/types'
+import type { ParsedProfile, ChainAllocation, SupportedChain } from '@/types'
+import { SUPPORTED_CHAINS } from '@/types'
 
-const IS_TESTNET = true 
-const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1 
+const IS_TESTNET = true
+const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1
 
-function parseAllocation(raw: string | undefined): TokenAllocation[] {
+// Parse chain allocations from text record
+// Format: "base-sepolia:80,arbitrum-sepolia:10,arc-testnet:10"
+function parseChainAllocations(raw: string | undefined): ChainAllocation[] {
   if (!raw || raw === '') {
-    return [{ token: 'USDC', percentage: 100 }]
+    // Default: 100% on base-sepolia
+    return [{ chain: 'base-sepolia', percentage: 100 }]
   }
-  
+
   try {
     const allocations = raw.split(',').map(part => {
-      const [token, pct] = part.split(':')
-      return { token: token.trim(), percentage: parseInt(pct) }
-    })
-    
+      const [chain, pct] = part.split(':')
+      const chainTrimmed = chain.trim() as SupportedChain
+
+      // Validate it's a supported chain
+      if (!SUPPORTED_CHAINS.includes(chainTrimmed)) {
+        console.warn('Unsupported chain in allocation:', chainTrimmed)
+        return null
+      }
+
+      return {
+        chain: chainTrimmed,
+        percentage: parseInt(pct)
+      }
+    }).filter((a): a is ChainAllocation => a !== null && !isNaN(a.percentage))
+
+    // Validate total is 100%
     const total = allocations.reduce((sum, a) => sum + a.percentage, 0)
     if (total !== 100) {
-      console.warn('Allocation percentages do not sum to 100:', raw)
+      console.warn('Chain allocation percentages do not sum to 100:', total, raw)
     }
-    
-    return allocations
+
+    return allocations.length > 0 ? allocations : [{ chain: 'base-sepolia', percentage: 100 }]
   } catch (error) {
-    console.error('Failed to parse allocation:', raw, error)
-    return [{ token: 'USDC', percentage: 100 }]
+    console.error('Failed to parse chain allocations:', raw, error)
+    return [{ chain: 'base-sepolia', percentage: 100 }]
   }
 }
 
 export function useChainRouterProfile(ensName?: string) {
   const { address: connectedAddress } = useAccount()
-  
+
   // If no ENS name provided, try to resolve from connected address
   const { data: resolvedEnsName, isLoading: nameLoading } = useEnsName({
     address: connectedAddress,
     chainId: ENS_CHAIN_ID,
   })
-  
+
   // Use provided ensName or resolved name
   const nameToUse = ensName || resolvedEnsName
   const normalizedName = nameToUse ? normalize(nameToUse) : undefined
@@ -51,44 +67,18 @@ export function useChainRouterProfile(ensName?: string) {
     },
   })
 
-  // Read text records
-  const { data: chain, isLoading: chainLoading } = useEnsText({
+  // Read chain allocation text record
+  const { data: chainAlloc, isLoading: chainAllocLoading } = useEnsText({
     name: normalizedName,
-    key: 'ENSRouter.chain',
+    key: 'ENSRouter.chainAlloc',
     chainId: ENS_CHAIN_ID,
     query: {
       enabled: !!normalizedName,
     },
   })
 
-  const { data: alloc, isLoading: allocLoading } = useEnsText({
-    name: normalizedName,
-    key: 'ENSRouter.alloc',
-    chainId: ENS_CHAIN_ID,
-    query: {
-      enabled: !!normalizedName,
-    },
-  })
-
-  const { data: slippage, isLoading: slippageLoading } = useEnsText({
-    name: normalizedName,
-    key: 'ENSRouter.slippage',
-    chainId: ENS_CHAIN_ID,
-    query: {
-      enabled: !!normalizedName,
-    },
-  })
-
-  const { data: autoswap, isLoading: autoswapLoading } = useEnsText({
-    name: normalizedName,
-    key: 'ENSRouter.autoswap',
-    chainId: ENS_CHAIN_ID,
-    query: {
-      enabled: !!normalizedName,
-    },
-  })
-
-  const { data: fallback } = useEnsText({
+  // Read fallback chain
+  const { data: fallback, isLoading: fallbackLoading } = useEnsText({
     name: normalizedName,
     key: 'ENSRouter.fallback',
     chainId: ENS_CHAIN_ID,
@@ -97,18 +87,16 @@ export function useChainRouterProfile(ensName?: string) {
     },
   })
 
-  const isLoading = 
+  const isLoading =
     nameLoading ||
-    addressLoading || 
-    chainLoading || 
-    allocLoading || 
-    slippageLoading || 
-    autoswapLoading
+    addressLoading ||
+    chainAllocLoading ||
+    fallbackLoading
 
   // For basic profile, we just need an address
   const hasBasicProfile = !!address && !!nameToUse
-  // For full router profile, we need the chain record
-  const hasRouterProfile = !!chain && chain !== ''
+  // For full router profile, we need chain allocations
+  const hasRouterProfile = !!chainAlloc && chainAlloc !== ''
 
   // Return loading state
   if (isLoading) {
@@ -134,16 +122,15 @@ export function useChainRouterProfile(ensName?: string) {
     }
   }
 
+  // Parse chain allocations
+  const chainAllocations = parseChainAllocations(chainAlloc ?? undefined)
+
   // Return parsed profile
   const profile: ParsedProfile = {
     ensName: nameToUse,
     address,
-    chain: chain || 'base-sepolia',
-    //@ts-ignore
-    allocations: parseAllocation(alloc),
-    slippageTolerance: parseFloat(slippage || '0.5'),
-    autoSwapEnabled: autoswap === 'true',
-    fallbackChain: fallback || undefined,
+    chainAllocations,
+    fallbackChain: (fallback as SupportedChain) || undefined,
   }
 
   return {
