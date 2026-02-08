@@ -36,6 +36,29 @@ const getExplorerUrl = (chainKey: string, txHash: string): string => {
   return `${explorers[chainKey] || 'https://etherscan.io/tx/'}${txHash}`
 }
 
+// ✅ NEW: Fix truncated transaction hashes from Bridge Kit
+const normalizeTxHash = (txHash: string | undefined): string | undefined => {
+  if (!txHash) return undefined
+  
+  // Remove 0x prefix if present
+  let hash = txHash.toLowerCase().replace('0x', '')
+  
+  // Bridge Kit sometimes returns 63 characters instead of 64
+  // Pad with leading zeros if needed
+  if (hash.length === 63) {
+    console.warn('⚠️ Detected truncated tx hash, padding with leading zero:', txHash)
+    hash = '0' + hash
+  }
+  
+  // If still not 64 characters, something is very wrong
+  if (hash.length !== 64) {
+    console.error('❌ Invalid tx hash length:', hash.length, txHash)
+    return undefined
+  }
+  
+  return '0x' + hash
+}
+
 export function useBridgeUSDC() {
   const { evmAdapter, isReady } = useEvmAdapter()
   const [isPending, setIsPending] = useState(false)
@@ -91,7 +114,10 @@ export function useBridgeUSDC() {
         // Parse steps from Bridge Kit result
         const rawSteps = (result as any).steps || []
         const parsedSteps: BridgeStep[] = rawSteps.map((step: any, idx: number) => {
-          const txHash = step.txHash || step.data?.txHash
+          // ✅ FIX: Normalize the transaction hash
+          const rawTxHash = step.txHash || step.data?.txHash
+          const txHash = normalizeTxHash(rawTxHash)
+          
           const stepName = STEP_NAME_MAP[step.name] || step.name
 
           // Determine which chain this step is on

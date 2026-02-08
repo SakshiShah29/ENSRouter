@@ -5,6 +5,8 @@ import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
 import { formatUnits, parseUnits } from 'viem'
 import { useBridgeUSDC } from './useBridgeUSDC'
 import { CHAIN_ID_TO_KEY, CHAIN_USDC_ADDRESS, USDC_ABI } from '@/lib/contracts'
+import { createTransaction } from '@/lib/api'
+import { sendBridgeWebhook } from '@/lib/webhook'
 import { toast } from 'sonner'
 import type {
   ParsedProfile,
@@ -181,6 +183,25 @@ export function usePayment() {
       setTransaction(tx)
       txRef.current = tx
 
+      // Register transaction with backend so webhooks and Telegram notifications work
+      try {
+        console.log('📝 Creating transaction on server...')
+        await createTransaction({
+          ...tx,
+          sender: tx.sender,
+          recipient: tx.recipient,
+          recipientAddress: tx.recipientAddress,
+          totalAmountUSDC: tx.totalAmountUSDC,
+          sourceChain: tx.sourceChain,
+          status: tx.status,
+          chainTransfers: tx.chainTransfers,
+          createdAt: tx.createdAt,
+        })
+        console.log('✅ Transaction created on server')
+      } catch (err) {
+        console.warn('⚠️ Could not create transaction on server:', err)
+      }
+
       try {
         // Process each chain transfer sequentially
         for (let i = 0; i < chainTransfers.length; i++) {
@@ -205,7 +226,13 @@ export function usePayment() {
               destChain: transfer.chain,
               amount: transfer.amount,
               recipientAddress: recipient.address,
-              onStepUpdate: (bridgeStep: BridgeStep, stepIndex: number) => {
+              onStepUpdate: async (bridgeStep: BridgeStep, stepIndex: number) => {
+                console.log('🔄 Bridge step update:', {
+                  step: bridgeStep.name,
+                  state: bridgeStep.state,
+                  stepIndex,
+                })
+
                 updateChainStep(i, stepIndex, {
                   status: bridgeStep.state === 'success' ? 'completed' :
                           bridgeStep.state === 'error' ? 'failed' : 'processing',
@@ -226,6 +253,27 @@ export function usePayment() {
                   const nextStatus = statusMap[transfer.steps[stepIndex + 1]?.name]
                   if (nextStatus) {
                     updateTransaction({ status: nextStatus })
+                  }
+                }
+
+                // Send webhook update - AWAIT this!
+                const current = txRef.current
+                if (current) {
+                  console.log('📡 Sending step webhook...')
+                  try {
+                    const sent = await sendBridgeWebhook('bridge.step', current.id, {
+                      step: {
+                        name: bridgeStep.name,
+                        state: bridgeStep.state,
+                        txHash: bridgeStep.txHash,
+                        explorerUrl: bridgeStep.explorerUrl,
+                        error: bridgeStep.error,
+                      },
+                      transaction: current,
+                    })
+                    console.log('📡 Step webhook result:', sent ? '✅ sent' : '❌ failed')
+                  } catch (webhookError) {
+                    console.error('❌ Webhook error:', webhookError)
                   }
                 }
               },
@@ -284,6 +332,25 @@ export function usePayment() {
               },
             })
 
+            // Send webhook for same-chain transfer
+            const current = txRef.current
+            if (current) {
+              console.log('📡 Sending transfer step webhook...')
+              try {
+                await sendBridgeWebhook('bridge.step', current.id, {
+                  step: {
+                    name: 'Transfer USDC',
+                    state: 'processing',
+                    txHash: txHash,
+                    explorerUrl: explorerUrl,
+                  },
+                  transaction: current,
+                })
+              } catch (webhookError) {
+                console.error('❌ Webhook error:', webhookError)
+              }
+            }
+
             const receipt = await publicClient?.waitForTransactionReceipt({
               hash: txHash,
               confirmations: 1,
@@ -296,6 +363,25 @@ export function usePayment() {
               toast.success(`Transfer on ${transfer.chain} complete!`, {
                 description: `${transfer.amount} USDC sent`,
               })
+
+              // Send completion webhook for same-chain transfer
+              const completedTx = txRef.current
+              if (completedTx) {
+                console.log('📡 Sending transfer completion webhook...')
+                try {
+                  await sendBridgeWebhook('bridge.step', completedTx.id, {
+                    step: {
+                      name: 'Transfer USDC',
+                      state: 'success',
+                      txHash: txHash,
+                      explorerUrl: explorerUrl,
+                    },
+                    transaction: completedTx,
+                  })
+                } catch (webhookError) {
+                  console.error('❌ Webhook error:', webhookError)
+                }
+              }
             } else {
               throw new Error('Transaction reverted')
             }
@@ -308,6 +394,17 @@ export function usePayment() {
           completedAt: Date.now(),
         })
 
+        const finalTx = txRef.current
+        if (finalTx) {
+          console.log('📡 Sending final completion webhook...')
+          try {
+            await sendBridgeWebhook('bridge.complete', finalTx.id, { transaction: finalTx })
+            console.log('✅ Completion webhook sent')
+          } catch (webhookError) {
+            console.error('❌ Completion webhook error:', webhookError)
+          }
+        }
+
         toast.success('All payments completed!', {
           description: `${amountUSD} USDC sent to ${recipient.ensName}`,
         })
@@ -315,7 +412,7 @@ export function usePayment() {
         return txRef.current!
 
       } catch (error) {
-        console.error('Payment failed:', error)
+        console.error('💥 Payment failed:', error)
 
         // Find and mark the failed transfer/step
         const currentTx = txRef.current
@@ -333,6 +430,22 @@ export function usePayment() {
             updateChainTransfer(processingTransferIndex, { status: 'failed' })
           }
           updateTransaction({ status: 'failed' })
+        }
+
+        const failedTx = txRef.current
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        if (failedTx) {
+          console.log('📡 Sending failure webhook...')
+          try {
+            await sendBridgeWebhook('bridge.failed', failedTx.id, {
+
+              //@ts-ignore
+              transaction: { ...failedTx, error: errorMessage },
+            })
+            console.log('✅ Failure webhook sent')
+          } catch (webhookError) {
+            console.error('❌ Failure webhook error:', webhookError)
+          }
         }
 
         toast.error('Payment failed', {

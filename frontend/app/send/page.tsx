@@ -116,13 +116,13 @@ export default function SendPage() {
           </CardContent>
         </Card>
 
-        {/* Payment Preview */}
+        {/* Payment Preview
         {profile && amount && parseFloat(amount) > 0 && (
           <PaymentPreview 
             profile={profile} 
             amount={amount} 
           />
-        )}
+        )} */}
 
         {/* Send / Reset Button */}
         {transaction?.status === 'completed' || transaction?.status === 'failed' ? (
