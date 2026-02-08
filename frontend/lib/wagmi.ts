@@ -13,11 +13,11 @@ export const config = getDefaultConfig({
     optimism,     // Destination chain
   ],
   transports: {
-    [mainnet.id]: http(`https://eth-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
-    [base.id]: http(`https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
-    [arbitrum.id]: http(`https://arb-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
-    [polygon.id]: http(`https://polygon-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
-    [optimism.id]: http(`https://opt-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`),
+    [mainnet.id]: http(process.env.ETHEREUM_RPC_URL!),
+    [base.id]: http(process.env.BASE_RPC_URL!),
+    [arbitrum.id]: http(process.env.ARB_RPC_URL!),
+    [polygon.id]: http(process.env.POLYGON_RPC_URL!),
+    [optimism.id]: http(process.env.OPT_RPC_URL!),
   },
   ssr: true,
 })
