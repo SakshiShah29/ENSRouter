@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: bridgepay-backend
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        fromDatabase:
+          name: bridgepay-mongo
+          property: connectionString
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: ETHEREUM_RPC_URL
+        sync: false
+
+databases:
+  - name: bridgepay-mongo
+    databaseName: bridge-payments
+    user: bridgepay
