@@ -1,11 +1,24 @@
-import { useEnsAvatar } from 'wagmi'
+// hooks/useENSAvatar.ts
+import { useEnsAvatar, useEnsText } from 'wagmi'
 import { normalize } from 'viem/ens'
 
-export function useENSAvatar(ensName: string | undefined) {
+const IS_TESTNET = true 
+const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1 
+
+export function useENSAvatar(ensName?: string) {
   const { data: avatar } = useEnsAvatar({
     name: ensName ? normalize(ensName) : undefined,
-    chainId: 1,
+    chainId: ENS_CHAIN_ID,
   })
-
   return avatar
+}
+
+// Add this new hook
+export function useENSHeader(ensName?: string) {
+  const { data: header } = useEnsText({
+    name: ensName ? normalize(ensName) : undefined,
+    key: 'header',
+    chainId: ENS_CHAIN_ID,
+  })
+  return header
 }

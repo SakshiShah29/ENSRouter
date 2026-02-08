@@ -1,8 +1,7 @@
-import { useEnsAddress, useEnsText, useEnsName } from 'wagmi'
+import { useEnsAddress, useEnsText, useEnsName, useEnsAvatar } from 'wagmi'
 import { normalize } from 'viem/ens'
 import { useAccount } from 'wagmi'
 import type { ParsedProfile, TokenAllocation } from '@/types'
-
 
 const IS_TESTNET = true 
 const ENS_CHAIN_ID = IS_TESTNET ? 11155111 : 1 
@@ -18,7 +17,6 @@ function parseAllocation(raw: string | undefined): TokenAllocation[] {
       return { token: token.trim(), percentage: parseInt(pct) }
     })
     
-
     const total = allocations.reduce((sum, a) => sum + a.percentage, 0)
     if (total !== 100) {
       console.warn('Allocation percentages do not sum to 100:', raw)
@@ -35,7 +33,7 @@ export function useChainRouterProfile(ensName?: string) {
   const { address: connectedAddress } = useAccount()
   
   // If no ENS name provided, try to resolve from connected address
-  const { data: resolvedEnsName } = useEnsName({
+  const { data: resolvedEnsName, isLoading: nameLoading } = useEnsName({
     address: connectedAddress,
     chainId: ENS_CHAIN_ID,
   })
@@ -100,14 +98,17 @@ export function useChainRouterProfile(ensName?: string) {
   })
 
   const isLoading = 
+    nameLoading ||
     addressLoading || 
     chainLoading || 
     allocLoading || 
     slippageLoading || 
     autoswapLoading
 
-  // Check if profile exists (at least chain is set)
-  const hasProfile = !!chain && chain !== ''
+  // For basic profile, we just need an address
+  const hasBasicProfile = !!address && !!nameToUse
+  // For full router profile, we need the chain record
+  const hasRouterProfile = !!chain && chain !== ''
 
   // Return loading state
   if (isLoading) {
@@ -116,17 +117,19 @@ export function useChainRouterProfile(ensName?: string) {
       isLoading: true,
       error: null,
       hasProfile: false,
+      hasRouterProfile: false,
       ensName: nameToUse,
     }
   }
 
   // Return no profile state
-  if (!address || !nameToUse || !hasProfile) {
+  if (!address || !nameToUse) {
     return {
       data: null,
       isLoading: false,
       error: addressError,
       hasProfile: false,
+      hasRouterProfile: false,
       ensName: nameToUse,
     }
   }
@@ -135,7 +138,7 @@ export function useChainRouterProfile(ensName?: string) {
   const profile: ParsedProfile = {
     ensName: nameToUse,
     address,
-      chain: chain || 'base-sepolia', 
+    chain: chain || 'base-sepolia',
     //@ts-ignore
     allocations: parseAllocation(alloc),
     slippageTolerance: parseFloat(slippage || '0.5'),
@@ -147,7 +150,27 @@ export function useChainRouterProfile(ensName?: string) {
     data: profile,
     isLoading: false,
     error: null,
-    hasProfile: true,
+    hasProfile: hasBasicProfile,
+    hasRouterProfile: hasRouterProfile,
     ensName: nameToUse,
   }
+}
+
+// Hook for ENS Avatar with fallback
+export function useENSAvatar(ensName?: string) {
+  const { data: avatar } = useEnsAvatar({
+    name: ensName ? normalize(ensName) : undefined,
+    chainId: ENS_CHAIN_ID,
+  })
+  return avatar
+}
+
+// Hook for ENS Header (banner) - checks text record
+export function useENSHeader(ensName?: string) {
+  const { data: header } = useEnsText({
+    name: ensName ? normalize(ensName) : undefined,
+    key: 'header',
+    chainId: ENS_CHAIN_ID,
+  })
+  return header
 }

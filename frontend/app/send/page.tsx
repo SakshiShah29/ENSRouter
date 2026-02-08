@@ -10,7 +10,7 @@ import { usePayment } from '@/hooks/usePayment'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
-import { ENSProfileCard } from '@/components/ENSProfileCard'
+import { ENSProfileCard, ENSProfileCardSkeleton } from '@/components/ENSProfileCard'
 import { PaymentPreview } from '@/components/PaymentPreview'
 import { PaymentStatusTracker } from '@/components/PaymentStatusTracker'
 import { WalletConnect } from '@/components/WalletConnect'
@@ -82,15 +82,19 @@ export default function SendPage() {
         </Card>
 
         {/* Show profile if resolved */}
-        {profile && <ENSProfileCard profile={profile} />}
-        {profileLoading && recipientENS && (
-          <Card>
-            <CardContent className="pt-6">
-              <p className="text-gray-600">Loading profile...</p>
-            </CardContent>
-          </Card>
-        )}
+        {profileLoading && recipientENS && <ENSProfileCardSkeleton />}
 
+{profile && !profileLoading && (
+  <ENSProfileCard profile={profile} />
+)}
+
+{!profile && !profileLoading && recipientENS && (
+  <Card className="bg-[#1a1b1f] border-gray-700">
+    <CardContent className="pt-6 text-center text-gray-400">
+      No profile found for {recipientENS}
+    </CardContent>
+  </Card>
+)}
         {/* Amount */}
         <Card>
           <CardContent className="pt-6">

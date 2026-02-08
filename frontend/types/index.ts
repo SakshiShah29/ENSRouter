@@ -14,35 +14,42 @@ export interface TokenAllocation {
   percentage: number // 0-100
 }
 
-// Payment transaction state
-export interface PaymentTransaction {
-  id: string
-  sender: `0x${string}`
-  recipient: string             // ENS name
-  recipientAddress: `0x${string}`
-  amountUSDC: string           // Wei format
-  status: PaymentStatus
-  steps: PaymentStep[]
-  bridgeResult?: BridgeResult
-  createdAt: number
-  completedAt?: number
-}
+// Payment status type
+export type PaymentStatus =
+  | 'pending'
+  | 'approving'
+  | 'burning'
+  | 'attesting'
+  | 'minting'
+  | 'processing'
+  | 'completed'
+  | 'failed'
 
-export enum PaymentStatus {
-  PENDING = "pending",
-  APPROVING = "approving",
-  BRIDGING = "bridging",
-  SWAPPING = "swapping",
-  COMPLETED = "completed",
-  FAILED = "failed"
-}
-
+// Payment step with proper tracking
 export interface PaymentStep {
   name: string
-  status: "pending" | "processing" | "completed" | "failed"
+  status: 'pending' | 'processing' | 'completed' | 'failed'
   txHash?: `0x${string}`
+  explorerUrl?: string
   timestamp: number
   error?: string
+  description?: string
+}
+
+// Bridge step from Circle Bridge Kit
+export interface BridgeStep {
+  name: string
+  state: 'pending' | 'processing' | 'success' | 'error'
+  txHash?: string
+  explorerUrl?: string
+  error?: string
+  data?: Record<string, unknown>
+}
+
+// Bridge result from Circle Bridge Kit
+export interface BridgeResult {
+  state: 'success' | 'error' | 'pending'
+  steps: BridgeStep[]
 }
 
 // Bridge estimate from Circle Bridge Kit
@@ -54,12 +61,20 @@ export interface BridgeEstimate {
   estimatedTime: number  // seconds
 }
 
-// Bridge result from Circle Bridge Kit
-export interface BridgeResult {
-  steps: Array<{
-    status: string
-    explorerUrl?: string
-  }>
+// Payment transaction state
+export interface PaymentTransaction {
+  id: string
+  sender: `0x${string}`
+  recipient: string
+  recipientAddress: `0x${string}`
+  amountUSDC: string
+  status: PaymentStatus
+  steps: PaymentStep[]
+  createdAt: number
+  completedAt?: number
+  sourceChain?: string
+  destChain?: string
+  bridgeResult?: BridgeResult
 }
 
 // Form types

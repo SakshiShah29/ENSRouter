@@ -43,3 +43,23 @@ export const DESTINATION_CHAINS: Chain[] = [
     isTestnet: false,
   },
 ]
+
+
+export const CHAIN_ID_TO_KEY: Record<number, string> = {
+  84532: 'base-sepolia',    // Base Sepolia
+  11155111: 'sepolia',      // Ethereum Sepolia
+  421614: 'arbitrum-sepolia', // Arbitrum Sepolia
+  5003: 'mantle-sepolia',   // Mantle Sepolia
+}
+
+
+export const CHAIN_KEY_TO_CIRCLE: Record<string, string> = {
+  'base-sepolia': 'Base_Sepolia',
+  'sepolia': 'Ethereum',
+  'arbitrum-sepolia': 'Arbitrum',
+  'mantle-sepolia': 'Mantle_Testnet',
+}
+
+export function getCircleChainName(chainKey: string): string {
+  return CHAIN_KEY_TO_CIRCLE[chainKey] || chainKey
+}
