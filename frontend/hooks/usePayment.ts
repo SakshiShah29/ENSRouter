@@ -1,118 +1,146 @@
-import { useState } from 'react'
-import { useWriteContract } from 'wagmi'
+import { useState, useCallback } from 'react'
+import { useAccount, useWriteContract, usePublicClient } from 'wagmi'
 import { parseUnits } from 'viem'
+import { useBridgeUSDC } from './useBridgeUSDC'
+import { CHAIN_ID_TO_KEY, CHAIN_USDC_ADDRESS, USDC_ABI } from '@/lib/contracts'
 import type { ParsedProfile, PaymentTransaction, PaymentStatus } from '@/types'
-import { USDC_ADDRESSES, USDC_ABI, CIRCLE_GATEWAY_ADDRESS } from '@/lib/contracts'
 
 export function usePayment() {
   const [transaction, setTransaction] = useState<PaymentTransaction | null>(null)
+  const { bridge, isReady: bridgeReady } = useBridgeUSDC()
   const { writeContractAsync } = useWriteContract()
+  const publicClient = usePublicClient()
+  const { chain: senderChain } = useAccount()
 
-  const executePayment = async (
-    recipient: ParsedProfile,
-    amountUSD: string,
-    senderAddress: `0x${string}`
-  ) => {
-    const txId = `tx_${Date.now()}`
-    const amountWei = parseUnits(amountUSD, 6) // USDC has 6 decimals
+  const isReady = bridgeReady
 
-    // Initialize transaction state
-    const tx: PaymentTransaction = {
-      id: txId,
-      sender: senderAddress,
-      recipient: recipient.ensName,
-      recipientAddress: recipient.address,
-      amountUSDC: amountWei.toString(),
-      status: 'pending' as PaymentStatus,
-      steps: [
-        { name: 'Approve USDC', status: 'pending', timestamp: Date.now() },
-        { name: 'Bridge to destination', status: 'pending', timestamp: Date.now() },
-        { name: 'Execute swaps', status: 'pending', timestamp: Date.now() },
-        { name: 'Complete delivery', status: 'pending', timestamp: Date.now() },
-      ],
-      acrossSwaps: [],
-      createdAt: Date.now(),
-    }
-    
-    setTransaction(tx)
+  const updateTx = useCallback(
+    (tx: PaymentTransaction) =>
+      setTransaction({
+        ...tx,
+        steps: tx.steps.map((s) => ({ ...s })),
+      }),
+    []
+  )
 
-    try {
-      // Step 1: Approve USDC spending
-      tx.steps[0].status = 'processing'
-      tx.status = 'approving' as PaymentStatus
-      setTransaction({...tx})
-      
-      const approveHash = await writeContractAsync({
-        address: USDC_ADDRESSES.arc,
-        abi: USDC_ABI,
-        functionName: 'approve',
-        args: [CIRCLE_GATEWAY_ADDRESS, amountWei],
-      })
-      
-      tx.steps[0].status = 'completed'
-      tx.steps[0].txHash = approveHash
-      setTransaction({...tx})
+  const executePayment = useCallback(
+    async (
+      recipient: ParsedProfile,
+      amountUSD: string,
+      senderAddress: `0x${string}`
+    ) => {
+      if (!senderChain) throw new Error('No chain detected')
 
-      // Step 2: Call backend API to execute payment
-      tx.steps[1].status = 'processing'
-      tx.status = 'bridging' as PaymentStatus
-      setTransaction({...tx})
+      const sourceChainKey = CHAIN_ID_TO_KEY[senderChain.id]
+      if (!sourceChainKey) throw new Error(`Unsupported source chain: ${senderChain.id}`)
 
-      const response = await fetch('/api/execute-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          recipient: recipient.ensName,
-          amount: amountWei.toString(),
-          profile: recipient,
-          senderAddress,
-        }),
-      })
+      const destChainKey = recipient.chain
+      const needsBridge = sourceChainKey !== destChainKey
 
-      if (!response.ok) {
-        throw new Error('Payment execution failed')
+      const txId = `tx_${Date.now()}`
+      const steps = needsBridge
+        ? [
+            { name: 'Bridge & deliver USDC via CCTP', status: 'pending' as const, timestamp: Date.now() },
+          ]
+        : [
+            { name: 'Transfer USDC', status: 'pending' as const, timestamp: Date.now() },
+          ]
+
+      const tx: PaymentTransaction = {
+        id: txId,
+        sender: senderAddress,
+        recipient: recipient.ensName,
+        recipientAddress: recipient.address,
+        amountUSDC: amountUSD,
+        status: 'pending' as PaymentStatus,
+        steps,
+        createdAt: Date.now(),
       }
 
-      const result = await response.json()
+      setTransaction(tx)
 
-      // Update remaining steps
-      tx.steps[1].status = 'completed'
-      tx.steps[1].txHash = result.bridgeTxHash
-      
-      if (recipient.autoSwapEnabled && result.acrossSwaps?.length > 0) {
-        tx.steps[2].status = 'completed'
-        tx.acrossSwaps = result.acrossSwaps
-        tx.status = 'swapping' as PaymentStatus
-      } else {
-        tx.steps[2].status = 'completed'
+      try {
+        if (needsBridge) {
+          // Bridge USDC directly to recipient via Circle Bridge Kit
+          tx.steps[0].status = 'processing'
+          tx.status = 'bridging' as PaymentStatus
+          updateTx(tx)
+
+          const result = await bridge({
+            sourceChain: sourceChainKey,
+            destChain: destChainKey,
+            amount: amountUSD,
+            recipientAddress: recipient.address,
+          })
+
+          tx.steps[0].status = 'completed'
+          tx.bridgeResult = result
+
+          // Extract explorer URL from first step if available
+          const firstStep = result.steps[0]
+          if (firstStep?.explorerUrl) {
+            tx.steps[0].txHash = firstStep.explorerUrl as `0x${string}`
+          }
+
+          tx.status = 'completed' as PaymentStatus
+          tx.completedAt = Date.now()
+          updateTx(tx)
+        } else {
+          // Same-chain: direct USDC transfer to recipient
+          tx.steps[0].status = 'processing'
+          tx.status = 'approving' as PaymentStatus
+          updateTx(tx)
+
+          const usdcAddress = CHAIN_USDC_ADDRESS[sourceChainKey]
+          if (!usdcAddress) throw new Error(`No USDC address for chain: ${sourceChainKey}`)
+
+          const amountWei = parseUnits(amountUSD, 6) // USDC has 6 decimals
+
+          const txHash = await writeContractAsync({
+            address: usdcAddress,
+            abi: USDC_ABI,
+            functionName: 'transfer',
+            args: [recipient.address, amountWei],
+          })
+
+          tx.steps[0].txHash = txHash
+          updateTx(tx)
+
+          // Wait for on-chain confirmation
+          if (publicClient) {
+            await publicClient.waitForTransactionReceipt({ hash: txHash })
+          }
+
+          tx.steps[0].status = 'completed'
+          tx.status = 'completed' as PaymentStatus
+          tx.completedAt = Date.now()
+          updateTx(tx)
+        }
+
+        return tx
+      } catch (error) {
+        tx.status = 'failed' as PaymentStatus
+        const currentStep = tx.steps.find((s) => s.status === 'processing')
+        if (currentStep) {
+          currentStep.status = 'failed'
+          currentStep.error =
+            error instanceof Error ? error.message : 'Unknown error'
+        }
+        updateTx(tx)
+        throw error
       }
-      
-      tx.steps[3].status = 'completed'
-      tx.status = 'completed' as PaymentStatus
-      tx.completedAt = Date.now()
-      setTransaction({...tx})
+    },
+    [bridge, writeContractAsync, publicClient, senderChain, updateTx]
+  )
 
-      return tx
-
-    } catch (error) {
-      tx.status = 'failed'  as PaymentStatus
-      const currentStep = tx.steps.find(s => s.status === 'processing')
-      if (currentStep) {
-        currentStep.status = 'failed'
-        currentStep.error = error instanceof Error ? error.message : 'Unknown error'
-      }
-      setTransaction({...tx})
-      throw error
-    }
-  }
-
-  const resetTransaction = () => {
+  const resetTransaction = useCallback(() => {
     setTransaction(null)
-  }
+  }, [])
 
   return {
     executePayment,
     transaction,
     resetTransaction,
+    isReady,
   }
 }

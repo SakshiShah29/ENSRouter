@@ -23,7 +23,7 @@ export interface PaymentTransaction {
   amountUSDC: string           // Wei format
   status: PaymentStatus
   steps: PaymentStep[]
-  acrossSwaps?: AcrossSwapInfo[]
+  bridgeResult?: BridgeResult
   createdAt: number
   completedAt?: number
 }
@@ -45,23 +45,21 @@ export interface PaymentStep {
   error?: string
 }
 
-export interface AcrossSwapInfo {
-  inputToken: string
-  outputToken: string
-  inputAmount: string
-  expectedOutput: string
-  solverFee: string
-  depositTxHash?: `0x${string}`
-  fillTxHash?: `0x${string}`
-  status: "pending" | "filled" | "failed"
+// Bridge estimate from Circle Bridge Kit
+export interface BridgeEstimate {
+  fees: Array<{
+    type: string      // "provider" | "protocol"
+    amount: string    // fee in USDC
+  }>
+  estimatedTime: number  // seconds
 }
 
-// Across quote from API
-export interface AcrossQuote {
-  expectedOutput: string
-  totalFee: string
-  solverFeePercent: number
-  estimatedFillTime: number
+// Bridge result from Circle Bridge Kit
+export interface BridgeResult {
+  steps: Array<{
+    status: string
+    explorerUrl?: string
+  }>
 }
 
 // Form types

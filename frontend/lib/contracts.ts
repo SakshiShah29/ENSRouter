@@ -1806,11 +1806,51 @@ export const USDC_ABI = [
 ] as const
 
 export const USDC_ADDRESSES = {
-  arc: '0x3600000000000000000000000000000000000000' as const,        // Get from Circle docs
-  base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const,
-  baseSepolia: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as const, 
-  arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as const,
+  // Mainnet
   ethereum: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const,
+  base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const,
+  arbitrum: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' as const,
+  arc: '0x3600000000000000000000000000000000000000' as const,
+  // Testnet
+  ethereumSepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' as const,
+  baseSepolia: '0x036CbD53842c5426634e7929541eC2318f3dCF7e' as const,
+  arbitrumSepolia: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d' as const,
+  arcTestnet: '0x3600000000000000000000000000000000000000' as const,
 } as const
 
-export const CIRCLE_GATEWAY_ADDRESS = '0x...' as const 
+// Maps our chain IDs (from ENS text records) to Bridge Kit chain strings
+export const BRIDGE_KIT_CHAINS: Record<string, string> = {
+  // Testnet
+  'ethereum-sepolia': 'Ethereum_Sepolia',
+  'base-sepolia': 'Base_Sepolia',
+  'arbitrum-sepolia': 'Arbitrum_Sepolia',
+  'arc-testnet': 'Arc_Testnet',
+  // Mainnet
+  'ethereum': 'Ethereum',
+  'base': 'Base',
+  'arbitrum': 'Arbitrum',
+  'arc': 'Arc',
+} as const
+
+// Maps our chain IDs to USDC addresses
+export const CHAIN_USDC_ADDRESS: Record<string, `0x${string}`> = {
+  'ethereum-sepolia': USDC_ADDRESSES.ethereumSepolia,
+  'base-sepolia': USDC_ADDRESSES.baseSepolia,
+  'arbitrum-sepolia': USDC_ADDRESSES.arbitrumSepolia,
+  'arc-testnet': USDC_ADDRESSES.arcTestnet,
+  'ethereum': USDC_ADDRESSES.ethereum,
+  'base': USDC_ADDRESSES.base,
+  'arbitrum': USDC_ADDRESSES.arbitrum,
+  'arc': USDC_ADDRESSES.arc,
+} as const
+
+// Maps wagmi chain IDs to our internal chain key strings
+export const CHAIN_ID_TO_KEY: Record<number, string> = {
+  1: 'ethereum',
+  11155111: 'ethereum-sepolia',
+  8453: 'base',
+  84532: 'base-sepolia',
+  42161: 'arbitrum',
+  421614: 'arbitrum-sepolia',
+  5042002: 'arc-testnet',
+} as const

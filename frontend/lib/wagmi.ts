@@ -3,7 +3,7 @@ import { mainnet, base, arbitrum, sepolia, baseSepolia, arbitrumSepolia } from '
 import { http } from 'wagmi'
 
 export const arcTestnet = {
-  id: 656476,
+  id: 5042002,
   name: 'Arc Testnet',
   nativeCurrency: { 
     name: 'USDC', 
@@ -12,7 +12,7 @@ export const arcTestnet = {
   },
   rpcUrls: {
     default: { 
-      http: ['https://sepolia-rollup.arbitrum.io/rpc'] 
+      http: ['https://rpc.testnet.arc.network'] 
     },
   },
   blockExplorers: {

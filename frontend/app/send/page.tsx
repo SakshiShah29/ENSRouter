@@ -18,7 +18,7 @@ import type { SendFormData } from '@/types'
 
 export default function SendPage() {
   const { address, isConnected } = useAccount()
-  const { executePayment, transaction } = usePayment()
+  const { executePayment, transaction, resetTransaction, isReady } = usePayment()
 
   const {
     register,
@@ -120,15 +120,26 @@ export default function SendPage() {
           />
         )}
 
-        {/* Send Button */}
-        <Button
-          type="submit"
-          className="w-full"
-          size="lg"
-          disabled={!profile || !amount || !!transaction}
-        >
-          {transaction ? 'Processing...' : 'Send Payment'}
-        </Button>
+        {/* Send / Reset Button */}
+        {transaction?.status === 'completed' || transaction?.status === 'failed' ? (
+          <Button
+            type="button"
+            className="w-full"
+            size="lg"
+            onClick={resetTransaction}
+          >
+            Send Another Payment
+          </Button>
+        ) : (
+          <Button
+            type="submit"
+            className="w-full"
+            size="lg"
+            disabled={!profile || !amount || !!transaction || !isReady}
+          >
+            {!isReady ? 'Connecting...' : transaction ? 'Processing...' : 'Send Payment'}
+          </Button>
+        )}
       </form>
 
       {/* Status Tracker */}

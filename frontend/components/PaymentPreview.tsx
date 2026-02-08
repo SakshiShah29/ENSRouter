@@ -1,6 +1,7 @@
+import { useAccount } from 'wagmi'
 import { Card, CardContent } from '@/components/ui/card'
-import { useAcrossQuote } from '@/hooks/useAccrossQuote'
-import { formatUSDC, formatTokenAmount } from '@/lib/utils'
+import { useBridgeEstimate } from '@/hooks/useBridgeEstimate'
+import { CHAIN_ID_TO_KEY } from '@/lib/contracts'
 import type { ParsedProfile } from '@/types'
 
 interface PaymentPreviewProps {
@@ -9,31 +10,65 @@ interface PaymentPreviewProps {
 }
 
 export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
-  const chainId = profile.chain === 'base' ? 8453 : 
-                  profile.chain === 'arbitrum' ? 42161 : 1
-
-  // Get quotes for non-USDC allocations
+  const { chain: senderChain } = useAccount()
   const swapAllocations = profile.allocations.filter(a => a.token !== 'USDC')
-  
+
+  const sourceChainKey = senderChain ? CHAIN_ID_TO_KEY[senderChain.id] : undefined
+  const needsBridge = !!sourceChainKey && sourceChainKey !== profile.chain
+
+  const { data: estimate, isLoading: estimateLoading } = useBridgeEstimate({
+    sourceChain: sourceChainKey ?? '',
+    destChain: profile.chain,
+    amount,
+    enabled: needsBridge,
+  })
+
   return (
     <Card>
       <CardContent className="pt-6">
         <h3 className="font-semibold mb-4">Payment Preview</h3>
-        
+
         <div className="space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-gray-600">Total Amount:</span>
             <span className="font-medium">{amount} USDC</span>
           </div>
 
+          {/* Bridge fee estimate */}
+          {needsBridge && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Bridge Fee:</span>
+              <span className="font-medium">
+                {estimateLoading
+                  ? 'Estimating...'
+                  : estimate?.fees?.length
+                    ? estimate.fees.map(f => `${f.amount} USDC`).join(' + ')
+                    : 'Included'}
+              </span>
+            </div>
+          )}
+
+          {needsBridge && (
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">Est. Delivery:</span>
+              <span className="font-medium">~8–20 seconds (fast)</span>
+            </div>
+          )}
+
+          {!needsBridge && sourceChainKey && (
+            <div className="text-xs text-green-600 font-medium">
+              Same chain — no bridge needed
+            </div>
+          )}
+
           <div className="border-t pt-3">
             <p className="text-sm font-medium mb-2">
               {profile.ensName} will receive on {profile.chain}:
             </p>
-            
+
             {profile.allocations.map((alloc, i) => {
               const allocAmount = (parseFloat(amount) * alloc.percentage / 100).toFixed(2)
-              
+
               if (alloc.token === 'USDC') {
                 return (
                   <div key={i} className="flex justify-between text-sm py-1">
@@ -43,12 +78,11 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
                 )
               }
 
-              // For non-USDC, show "fetching quote" or actual quote
               return (
                 <div key={i} className="flex justify-between text-sm py-1">
                   <span>{allocAmount} USDC</span>
                   <span className="text-gray-600">
-                    → ~{alloc.token} (via Across)
+                    → swap to {alloc.token} (via Uniswap)
                   </span>
                 </div>
               )
@@ -58,7 +92,7 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
           {profile.autoSwapEnabled && swapAllocations.length > 0 && (
             <div className="border-t pt-3">
               <p className="text-xs text-gray-500">
-                Across Protocol solvers will handle token swaps and pay destination gas
+                USDC will be bridged via Circle CCTP, then swapped to target tokens on the destination chain
               </p>
             </div>
           )}
