@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   Navbar,
   NavBody,
@@ -9,7 +10,6 @@ import {
   MobileNavHeader,
   MobileNavMenu,
   MobileNavToggle,
-  NavbarButton,
 } from "@/components/ui/resizable-navbar";
 
 interface ENSNavbarProps {
@@ -43,15 +43,8 @@ export function ENSNavbar({ className }: ENSNavbarProps) {
           {/* Nav Items - Centered */}
           <NavItems items={navLinks} />
 
-          {/* CTA Button */}
-          <NavbarButton
-            as="a"
-            href="/profile"
-            variant="gradient"
-            className="bg-gradient-to-r from-[#a3e635] to-emerald-400 text-black shadow-lg shadow-[#a3e635]/30"
-          >
-            Get Started
-          </NavbarButton>
+          {/* Wallet Connect Button */}
+          <ConnectButton />
         </NavBody>
 
         {/* Mobile Navbar */}
@@ -91,15 +84,7 @@ export function ENSNavbar({ className }: ENSNavbarProps) {
                 {link.name}
               </a>
             ))}
-            <NavbarButton
-              as="a"
-              href="/profile"
-              variant="gradient"
-              className="w-full bg-gradient-to-r from-[#a3e635] to-emerald-400 text-black"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Get Started
-            </NavbarButton>
+            <ConnectButton />
           </MobileNavMenu>
         </MobileNav>
       </Navbar>

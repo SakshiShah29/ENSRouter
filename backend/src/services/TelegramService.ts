@@ -50,7 +50,17 @@ export class TelegramService {
     try {
       await this.registerCommands();
       const webhookUrl = `${backendUrl}/api/telegram/webhook`;
+      console.log(`Setting Telegram webhook to: ${webhookUrl}`);
       await this.bot.telegram.setWebhook(webhookUrl);
+
+      // Verify the webhook was actually set
+      const info = await this.bot.telegram.getWebhookInfo();
+      console.log('Telegram webhook info:', JSON.stringify(info));
+
+      if (info.url !== webhookUrl) {
+        console.error(`Webhook URL mismatch! Expected: ${webhookUrl}, Got: ${info.url}`);
+      }
+
       this.isRunning = true;
       console.log(`Telegram bot webhook set: ${webhookUrl}`);
     } catch (error) {
@@ -504,12 +514,10 @@ private formatPaymentNotification(tx: TransactionSummary): string {
   private formatChainName(chain: SupportedChain | string): string {
     const names: Record<string, string> = {
       'ethereum': 'Ethereum',
-      'ethereum-sepolia': 'Ethereum Sepolia',
       'base': 'Base',
-      'base-sepolia': 'Base Sepolia',
       'arbitrum': 'Arbitrum',
-      'arbitrum-sepolia': 'Arbitrum Sepolia',
-      'arc-testnet': 'Arc Testnet',
+      'polygon': 'Polygon',
+      'optimism': 'Optimism',
     };
     return names[chain] || chain;
   }
@@ -519,13 +527,11 @@ private formatPaymentNotification(tx: TransactionSummary): string {
    */
   private getExplorerUrl(chain: SupportedChain | string, txHash: string): string {
     const explorers: Record<string, string> = {
-      'ethereum-sepolia': 'https://sepolia.etherscan.io/tx/',
-      'base-sepolia': 'https://sepolia.basescan.org/tx/',
-      'arbitrum-sepolia': 'https://sepolia.arbiscan.io/tx/',
-      'arc-testnet': 'https://testnet.arcscan.io/tx/',
       'ethereum': 'https://etherscan.io/tx/',
       'base': 'https://basescan.org/tx/',
       'arbitrum': 'https://arbiscan.io/tx/',
+      'polygon': 'https://polygonscan.com/tx/',
+      'optimism': 'https://optimistic.etherscan.io/tx/',
     };
     
     const baseUrl = explorers[chain] || 'https://etherscan.io/tx/';

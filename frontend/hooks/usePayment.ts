@@ -18,6 +18,54 @@ import type {
   BridgeStep,
 } from '@/types'
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'
+const WEBHOOK_SECRET = process.env.NEXT_PUBLIC_WEBHOOK_SECRET || ''
+
+// Generate HMAC-SHA256 signature for webhook payload
+async function signPayload(payload: Record<string, unknown>): Promise<string> {
+  const encoder = new TextEncoder()
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(WEBHOOK_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  )
+  const data = encoder.encode(JSON.stringify(payload))
+  const sig = await crypto.subtle.sign('HMAC', key, data)
+  return Array.from(new Uint8Array(sig))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+// Send webhook event to backend
+async function sendWebhookEvent(
+  event: 'bridge.complete' | 'bridge.failed',
+  transaction: PaymentTransaction
+): Promise<void> {
+  try {
+    const payload = {
+      event,
+      transactionId: transaction.id,
+      transaction,
+      timestamp: Date.now(),
+    }
+    const signature = await signPayload(payload)
+
+    await fetch(`${API_URL}/api/webhook/bridge-events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-webhook-signature': signature,
+      },
+      body: JSON.stringify({ ...payload, signature }),
+    })
+    console.log(`Webhook ${event} sent for ${transaction.id}`)
+  } catch (err) {
+    console.error(`Failed to send webhook ${event}:`, err)
+  }
+}
+
 // Get explorer URL for a chain
 const getExplorerUrl = (chainKey: string, txHash: string): string => {
   const explorers: Record<string, string> = {
@@ -451,6 +499,11 @@ export function usePayment() {
           description: `${amountUSD} USDC sent to ${recipient.ensName}`,
         })
 
+        // Send webhook to backend to trigger Telegram notification
+        if (txRef.current) {
+          sendWebhookEvent('bridge.complete', txRef.current)
+        }
+
         return txRef.current!
 
       } catch (error) {
@@ -472,6 +525,12 @@ export function usePayment() {
             updateChainTransfer(processingTransferIndex, { status: 'failed' })
           }
           updateTransaction({ status: 'failed' })
+
+          // Send webhook to backend to trigger Telegram notification
+          sendWebhookEvent('bridge.failed', {
+            ...currentTx,
+            status: 'failed',
+          })
         }
 
         toast.error('Payment failed', {
