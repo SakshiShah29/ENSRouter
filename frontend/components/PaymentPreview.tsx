@@ -12,7 +12,6 @@ interface PaymentPreviewProps {
 export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
   const { chain: senderChain } = useAccount()
 
-
   const sourceChainKey = senderChain ? CHAIN_ID_TO_KEY[senderChain.id] : undefined
   //@ts-ignore
   const needsBridge = !!sourceChainKey && sourceChainKey !== profile.chain
