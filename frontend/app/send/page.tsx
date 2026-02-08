@@ -16,7 +16,7 @@ import { PaymentStatusTracker } from '@/components/PaymentStatusTracker'
 import { WalletConnect } from '@/components/WalletConnect'
 import type { SendFormData } from '@/types'
 
-export default function SendPage() {
+export default function SendPage({ defaultENS }: { defaultENS?: string } = {}) {
   const { address, isConnected } = useAccount()
   const { executePayment, transaction, resetTransaction, isReady } = usePayment()
 
@@ -27,6 +27,9 @@ export default function SendPage() {
     formState: { errors },
   } = useForm<SendFormData>({
     resolver: zodResolver(sendFormSchema),
+    defaultValues: {
+      recipientENS: defaultENS || '',
+    },
   })
 
   const recipientENS = watch('recipientENS')

@@ -3,6 +3,7 @@ import { useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagm
 import { namehash } from 'viem/ens'
 import { encodeFunctionData } from 'viem'
 import { registerENSProfile } from '@/lib/api'
+
 import type { ProfileFormData, ChainAllocation } from '@/types'
 
 const ENS_PUBLIC_RESOLVER_SEPOLIA = '0xE99638b40E4Fff0129D56f03b55b6bbC4BBE49b5'
@@ -52,8 +53,10 @@ function encodeSingleSetText(node: `0x${string}`, key: string, value: string) {
 export function useSetProfile() {
   const [currentStep, setCurrentStep] = useState(0)
   const [isWriting, setIsWriting] = useState(false)
+
   const lastProfileDataRef = useRef<ProfileFormData | null>(null)
   const { chain: currentChain, address } = useAccount()
+
 
   const {
     writeContractAsync,
@@ -149,14 +152,13 @@ export function useSetProfile() {
       })
 
       console.log('Transaction hash received:', hash)
-
-      // Register with backend as soon as we have the hash (don't wait for confirmation)
       if (address) {
         console.log('Registering ENS profile with backend...', { ensName: data.ensName })
         registerENSProfile({ ensName: data.ensName, ethAddress: address })
           .then(() => console.log('ENS profile registered with server'))
           .catch((err) => console.error('Backend ENS register failed:', err))
       }
+
 
     } catch (error) {
       console.error('Error in setProfile:', error)
