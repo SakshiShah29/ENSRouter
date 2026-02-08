@@ -267,79 +267,151 @@ export function usePayment() {
               throw new Error(`Token ${transfer.token} not found on ${destChain}`)
             }
 
+            // Helper: execute a LI.FI bridge/swap and update UI steps
+            const executeBridge = async (tokenAddress: string, tokenSymbol: string) => {
+              const result = await bridge({
+                sourceChain: sourceChainKey,
+                destChain: destChain,
+                amount: transfer.amount,
+                destTokenAddress: tokenAddress,
+                destTokenSymbol: tokenSymbol,
+                recipientAddress: recipient.address,
+                slippage,
+                onStepUpdate: (bridgeStep: BridgeStep, stepIndex: number) => {
+                  const currentTx = txRef.current
+                  const currentSteps = currentTx?.chainTransfers[i]?.steps || []
+
+                  const stepUpdate: Partial<PaymentStep> = {
+                    name: bridgeStep.name,
+                    status: bridgeStep.state === 'success' ? 'completed' :
+                            bridgeStep.state === 'error' ? 'failed' : 'processing',
+                    txHash: bridgeStep.txHash as `0x${string}` | undefined,
+                    explorerUrl: bridgeStep.explorerUrl,
+                    error: bridgeStep.error,
+                    substatus: bridgeStep.substatus,
+                    message: bridgeStep.message,
+                    timestamp: Date.now(),
+                  }
+
+                  if (stepIndex < currentSteps.length) {
+                    updateChainStep(i, stepIndex, stepUpdate)
+                  } else {
+                    setTransaction(prev => {
+                      if (!prev) return prev
+                      const newTransfers = [...prev.chainTransfers]
+                      const newSteps = [...newTransfers[i].steps, {
+                        name: bridgeStep.name,
+                        status: stepUpdate.status!,
+                        timestamp: Date.now(),
+                        description: bridgeStep.message || `${bridgeStep.name} in progress`,
+                        chain: destChain,
+                        amount: transfer.amount,
+                        txHash: stepUpdate.txHash,
+                        explorerUrl: stepUpdate.explorerUrl,
+                        error: stepUpdate.error,
+                        substatus: bridgeStep.substatus,
+                        message: bridgeStep.message,
+                      } as PaymentStep]
+                      newTransfers[i] = { ...newTransfers[i], steps: newSteps }
+                      const newTx = { ...prev, chainTransfers: newTransfers }
+                      txRef.current = newTx
+                      return newTx
+                    })
+                  }
+
+                  const statusMap: Record<string, PaymentStatus> = {
+                    'Approve USDC': 'approving',
+                    'Bridge Transfer': 'bridging',
+                    'Swap': 'processing',
+                    'Receiving': 'bridging',
+                  }
+                  const stepStatus = statusMap[bridgeStep.name]
+                  if (stepStatus) {
+                    updateTransaction({ status: stepStatus })
+                  }
+                },
+              })
+              return result
+            }
+
             toast.info(`Sending ${transfer.token}`, {
               description: `${transfer.amount} USDC → ${transfer.token} (${transfer.percentage}%)`,
             })
 
             updateTransaction({ status: isSameChain ? 'processing' : 'approving' })
 
-            const result = await bridge({
-              sourceChain: sourceChainKey,
-              destChain: destChain,
-              amount: transfer.amount,
-              destTokenAddress,
-              destTokenSymbol: transfer.token,
-              recipientAddress: recipient.address,
-              slippage,
-              onStepUpdate: (bridgeStep: BridgeStep, stepIndex: number) => {
-                const currentTx = txRef.current
-                const currentSteps = currentTx?.chainTransfers[i]?.steps || []
+            let result
+            let finalTokenSymbol = transfer.token
+            const isSwapToNonUSDC = transfer.token.toUpperCase() !== 'USDC'
 
-                const stepUpdate: Partial<PaymentStep> = {
-                  name: bridgeStep.name,
-                  status: bridgeStep.state === 'success' ? 'completed' :
-                          bridgeStep.state === 'error' ? 'failed' : 'processing',
-                  txHash: bridgeStep.txHash as `0x${string}` | undefined,
-                  explorerUrl: bridgeStep.explorerUrl,
-                  error: bridgeStep.error,
-                  substatus: bridgeStep.substatus,
-                  message: bridgeStep.message,
-                  timestamp: Date.now(),
-                }
+            try {
+              result = await executeBridge(destTokenAddress, transfer.token)
+            } catch (bridgeErr) {
+              // If a non-USDC swap failed, fall back to sending USDC instead
+              if (isSwapToNonUSDC) {
+                const errMsg = bridgeErr instanceof Error ? bridgeErr.message : String(bridgeErr)
+                console.warn(`Swap to ${transfer.token} failed (${errMsg}), falling back to USDC`)
 
-                if (stepIndex < currentSteps.length) {
-                  updateChainStep(i, stepIndex, stepUpdate)
-                } else {
-                  // New process from LI.FI — append as a new step
-                  setTransaction(prev => {
-                    if (!prev) return prev
-                    const newTransfers = [...prev.chainTransfers]
-                    const newSteps = [...newTransfers[i].steps, {
-                      name: bridgeStep.name,
-                      status: stepUpdate.status!,
-                      timestamp: Date.now(),
-                      description: bridgeStep.message || `${bridgeStep.name} in progress`,
-                      chain: destChain,
-                      amount: transfer.amount,
-                      txHash: stepUpdate.txHash,
-                      explorerUrl: stepUpdate.explorerUrl,
-                      error: stepUpdate.error,
-                      substatus: bridgeStep.substatus,
-                      message: bridgeStep.message,
-                    } as PaymentStep]
-                    newTransfers[i] = { ...newTransfers[i], steps: newSteps }
-                    const newTx = { ...prev, chainTransfers: newTransfers }
-                    txRef.current = newTx
-                    return newTx
+                toast.warning(`${transfer.token} swap failed, sending USDC instead`, {
+                  description: errMsg,
+                })
+
+                // Reset steps for the fallback attempt
+                const fallbackSteps = isSameChain
+                  ? createTransferStep(destChain, transfer.amount)
+                  : createBridgeSteps(destChain, 'USDC', transfer.amount)
+
+                updateChainTransfer(i, {
+                  status: 'processing',
+                  token: 'USDC',
+                  steps: fallbackSteps,
+                })
+                updateChainStep(i, 0, { status: 'processing' })
+                finalTokenSymbol = 'USDC'
+
+                if (isSameChain) {
+                  // Same-chain fallback: direct USDC transfer
+                  const amountWei = parseUnits(transfer.amount, 6)
+                  const txHash = await writeContractAsync({
+                    address: usdcAddress,
+                    abi: USDC_ABI,
+                    functionName: 'transfer',
+                    args: [recipient.address, amountWei],
                   })
-                }
 
-                // Update overall transaction status
-                const statusMap: Record<string, PaymentStatus> = {
-                  'Approve USDC': 'approving',
-                  'Bridge Transfer': 'bridging',
-                  'Swap': 'processing',
-                  'Receiving': 'bridging',
+                  const explorerUrl = getExplorerUrl(sourceChainKey, txHash)
+                  updateChainStep(i, 0, { txHash, explorerUrl })
+
+                  const receipt = await publicClient?.waitForTransactionReceipt({
+                    hash: txHash,
+                    confirmations: 1,
+                  })
+
+                  if (receipt?.status === 'success') {
+                    updateChainStep(i, 0, { status: 'completed', timestamp: Date.now() })
+                    updateChainTransfer(i, { status: 'completed' })
+                    toast.success(`USDC fallback transfer complete!`, {
+                      description: `${transfer.amount} USDC sent`,
+                    })
+                  } else {
+                    throw new Error('Fallback USDC transaction reverted')
+                  }
+                  continue
+                } else {
+                  // Cross-chain fallback: bridge USDC to USDC on dest chain
+                  result = await executeBridge(
+                    CHAIN_USDC_ADDRESS[destChain],
+                    'USDC',
+                  )
                 }
-                const stepStatus = statusMap[bridgeStep.name]
-                if (stepStatus) {
-                  updateTransaction({ status: stepStatus })
-                }
-              },
-            })
+              } else {
+                // USDC-to-USDC bridge failed — no fallback possible
+                throw bridgeErr
+              }
+            }
 
             // Update transfer with final result
-            const finalSteps = transfer.steps.map((step, idx) => {
+            const finalSteps = (txRef.current?.chainTransfers[i]?.steps || transfer.steps).map((step, idx) => {
               const bridgeStep = result.steps[idx]
               if (bridgeStep) {
                 return {
@@ -356,12 +428,15 @@ export function usePayment() {
 
             updateChainTransfer(i, {
               status: 'completed',
+              token: finalTokenSymbol,
               steps: finalSteps,
               bridgeResult: result,
             })
 
-            toast.success(`${transfer.token} transfer complete!`, {
-              description: `${transfer.amount} USDC → ${transfer.token} delivered`,
+            toast.success(`${finalTokenSymbol} transfer complete!`, {
+              description: finalTokenSymbol === transfer.token
+                ? `${transfer.amount} USDC → ${transfer.token} delivered`
+                : `${transfer.amount} USDC delivered (fallback from ${transfer.token})`,
             })
           }
         }

@@ -1,15 +1,18 @@
 'use client'
 
 import { useState } from 'react'
-import { useAccount } from 'wagmi'
+import { useAccount, useReadContract } from 'wagmi'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
+import { formatUnits } from 'viem'
 import { sendFormSchema } from '@/lib/validations'
 import { useChainRouterProfile } from '@/hooks/useENSRouterProfile'
 import { usePayment } from '@/hooks/usePayment'
+import { CHAIN_ID_TO_KEY, CHAIN_USDC_ADDRESS, USDC_ABI } from '@/lib/contracts'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { ENSProfileCard, ENSProfileCardSkeleton } from '@/components/ENSProfileCard'
 import { PaymentPreview } from '@/components/PaymentPreview'
 import { PaymentStatusTracker } from '@/components/PaymentStatusTracker'
@@ -17,8 +20,23 @@ import { WalletConnect } from '@/components/WalletConnect'
 import type { SendFormData } from '@/types'
 
 export default function SendPage({ defaultENS }: { defaultENS?: string } = {}) {
-  const { address, isConnected } = useAccount()
+  const { address, isConnected, chain: senderChain } = useAccount()
   const { executePayment, transaction, resetTransaction, isReady } = usePayment()
+
+  const senderChainKey = senderChain ? CHAIN_ID_TO_KEY[senderChain.id] : undefined
+  const usdcAddress = senderChainKey ? CHAIN_USDC_ADDRESS[senderChainKey] : undefined
+
+  const { data: usdcBalance } = useReadContract({
+    address: usdcAddress,
+    abi: USDC_ABI,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && !!usdcAddress },
+  })
+
+  const formattedBalance = usdcBalance != null
+    ? parseFloat(formatUnits(usdcBalance as bigint, 6)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : undefined
 
   const {
     register,
@@ -63,6 +81,33 @@ export default function SendPage({ defaultENS }: { defaultENS?: string } = {}) {
   return (
     <div className="container mx-auto max-w-2xl p-8">
       <h1 className="text-3xl font-bold mb-8">Send USDC</h1>
+
+      {/* Sender Info */}
+      <Card className="mb-6">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <p className="text-xs text-gray-500">Your Wallet</p>
+              <p className="text-sm font-mono font-medium">
+                {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '—'}
+              </p>
+            </div>
+            <div className="text-right space-y-1">
+              <div className="flex items-center justify-end gap-2">
+                <p className="text-xs text-gray-500">Chain</p>
+                {senderChain && (
+                  <Badge variant="outline" className="text-xs capitalize">
+                    {senderChainKey || senderChain.name}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm font-medium">
+                {formattedBalance != null ? `${formattedBalance} USDC` : '—'}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         {/* Recipient ENS */}
