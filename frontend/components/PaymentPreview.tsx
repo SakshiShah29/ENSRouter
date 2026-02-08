@@ -12,9 +12,6 @@ interface PaymentPreviewProps {
 export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
   const { chain: senderChain } = useAccount()
 
-  //@ts-ignore
-  const swapAllocations = profile.allocations.filter(a => a.token !== 'USDC')
-
   const sourceChainKey = senderChain ? CHAIN_ID_TO_KEY[senderChain.id] : undefined
   //@ts-ignore
   const needsBridge = !!sourceChainKey && sourceChainKey !== profile.chain
@@ -70,28 +67,6 @@ export function PaymentPreview({ profile, amount }: PaymentPreviewProps) {
               {/* @ts-ignore */}
               {profile.ensName} will receive on {profile.chain}:
             </p>
-{/* @ts-ignore */}
-            {profile.allocations.map((alloc, i) => {
-              const allocAmount = (parseFloat(amount) * alloc.percentage / 100).toFixed(2)
-
-              if (alloc.token === 'USDC') {
-                return (
-                  <div key={i} className="flex justify-between text-sm py-1">
-                    <span>{allocAmount} USDC</span>
-                    <span className="text-gray-600">→ delivered as USDC</span>
-                  </div>
-                )
-              }
-
-              return (
-                <div key={i} className="flex justify-between text-sm py-1">
-                  <span>{allocAmount} USDC</span>
-                  <span className="text-gray-600">
-                    → swap to {alloc.token} (via Uniswap)
-                  </span>
-                </div>
-              )
-            })}
           </div>
         </div>
       </CardContent>
