@@ -27,7 +27,7 @@ export interface BridgeStepPayload {
 
 // Payment transaction from frontend
 export interface PaymentTransaction {
-  id: string;
+  transactionId: string;
   sender: string;
   senderAddress: string;
   recipient: string; // ENS name

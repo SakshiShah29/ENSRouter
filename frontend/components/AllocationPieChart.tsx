@@ -1,14 +1,13 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts'
-import type { TokenAllocation } from '@/types'
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042']
 
 interface AllocationPieChartProps {
-  allocations: TokenAllocation[]
+  allocations: any
 }
 
 export function AllocationPieChart({ allocations }: AllocationPieChartProps) {
-  const data = allocations.map(alloc => ({
+  const data = allocations.map((alloc:any) => ({
     name: alloc.token,
     value: alloc.percentage,
   }))
@@ -27,7 +26,7 @@ export function AllocationPieChart({ allocations }: AllocationPieChartProps) {
             fill="#8884d8"
             dataKey="value"
           >
-            {data.map((entry, index) => (
+            {data.map((entry:any, index:any) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>

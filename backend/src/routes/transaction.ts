@@ -10,7 +10,7 @@ export const createTransactionRouter = (): Router => {
     try {
       const body = req.body as PaymentTransaction & { sender?: string };
       const {
-        id,
+        transactionId: id,
         sender,
         recipient,
         recipientAddress,

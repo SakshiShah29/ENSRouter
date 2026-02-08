@@ -98,7 +98,7 @@ export class WebhookService {
     // Prefer full transaction update so server stays in sync with frontend
     if (transaction) {
       console.log('💾 Upserting full transaction:', {
-        id: transaction.id,
+        id: transaction.transactionId,
         status: transaction.status,
         chainTransfers: transaction.chainTransfers.length,
       });
