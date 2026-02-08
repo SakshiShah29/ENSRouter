@@ -4,8 +4,8 @@ import { TelegramService } from '../services/TelegramService';
 export const createTelegramRouter = (telegramService: TelegramService): Router => {
   const router = Router();
 
-  // Telegram sends updates to this endpoint
-  router.post('/webhook', telegramService.getWebhookCallback());
+  // Mount Telegraf's webhook handler directly — it handles the POST internally
+  router.use('/webhook', telegramService.getWebhookCallback());
 
   return router;
 };

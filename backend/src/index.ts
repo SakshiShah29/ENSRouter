@@ -18,7 +18,7 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3000');
 
 // Validate required env vars
-const requiredEnvVars = ['MONGODB_URI', 'TELEGRAM_BOT_TOKEN', 'WEBHOOK_SECRET', 'ETHEREUM_RPC_URL'];
+const requiredEnvVars = ['MONGODB_URI', 'TELEGRAM_BOT_TOKEN', 'WEBHOOK_SECRET', 'ETHEREUM_RPC_URL', 'BACKEND_URL'];
 for (const envVar of requiredEnvVars) {
   if (!process.env[envVar]) {
     console.error(`Missing required environment variable: ${envVar}`);
@@ -86,15 +86,9 @@ const startServer = async () => {
       console.log(`[${new Date().toISOString()}] Server running on port ${PORT}`);
     });
 
-    // Start Telegram bot
-    const backendUrl = process.env.BACKEND_URL;
-    if (backendUrl) {
-      console.log('Setting up Telegram webhook...');
-      await telegramService.setWebhook(backendUrl);
-    } else {
-      console.log('No BACKEND_URL set, starting Telegram bot in polling mode...');
-      await telegramService.startPolling();
-    }
+    // Start Telegram bot via webhook
+    console.log('Setting up Telegram webhook...');
+    await telegramService.setWebhook(process.env.BACKEND_URL!);
 
     // Start notification processor
     startNotificationProcessor();

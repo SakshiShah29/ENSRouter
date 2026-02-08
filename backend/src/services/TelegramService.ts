@@ -44,28 +44,7 @@ export class TelegramService {
   }
 
   /**
-   * Start the bot in polling mode (for local development)
-   */
-  async startPolling(): Promise<void> {
-    if (this.isRunning) return;
-
-    try {
-      await this.registerCommands();
-      await this.bot.launch();
-      this.isRunning = true;
-
-      console.log('Telegram bot started (polling mode)');
-
-      process.once('SIGINT', () => this.stop());
-      process.once('SIGTERM', () => this.stop());
-    } catch (error) {
-      console.error('Failed to start Telegram bot:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Set up webhook mode (for production)
+   * Set up webhook mode
    */
   async setWebhook(backendUrl: string): Promise<void> {
     try {
@@ -84,7 +63,7 @@ export class TelegramService {
    * Get Express middleware for handling Telegram webhook updates
    */
   getWebhookCallback() {
-    return this.bot.webhookCallback('/api/telegram/webhook');
+    return this.bot.webhookCallback('/');
   }
 
   /**
