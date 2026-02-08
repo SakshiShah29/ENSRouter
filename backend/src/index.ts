@@ -61,7 +61,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api', createRoutes(webhookService, ensService));
+app.use('/api', createRoutes(webhookService, ensService, telegramService));
 
 // Error handling
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -87,9 +87,14 @@ const startServer = async () => {
     });
 
     // Start Telegram bot
-    console.log('Starting Telegram bot...');
-    await telegramService.start();
-    console.log('Telegram bot started');
+    const backendUrl = process.env.BACKEND_URL;
+    if (backendUrl) {
+      console.log('Setting up Telegram webhook...');
+      await telegramService.setWebhook(backendUrl);
+    } else {
+      console.log('No BACKEND_URL set, starting Telegram bot in polling mode...');
+      await telegramService.startPolling();
+    }
 
     // Start notification processor
     startNotificationProcessor();
@@ -123,7 +128,7 @@ const startNotificationProcessor = () => {
 // Graceful shutdown
 const gracefulShutdown = async (signal: string) => {
   console.log(`\n${signal} received. Shutting down...`);
-  telegramService.stop();
+  await telegramService.stop();
   await disconnectDatabase();
   process.exit(0);
 };

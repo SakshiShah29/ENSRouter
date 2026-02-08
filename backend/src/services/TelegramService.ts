@@ -44,28 +44,18 @@ export class TelegramService {
   }
 
   /**
-   * Start the bot
+   * Start the bot in polling mode (for local development)
    */
-  async start(): Promise<void> {
+  async startPolling(): Promise<void> {
     if (this.isRunning) return;
 
     try {
-      // Register bot commands with Telegram so they appear in the menu with descriptions
-      await this.bot.telegram.setMyCommands([
-        { command: 'start', description: 'Start the bot and see how to receive USDC payment notifications across chains' },
-        { command: 'link', description: 'Link your ENS name (e.g. vitalik.eth) to receive payment alerts' },
-        { command: 'unlink', description: 'Disconnect your ENS from this Telegram account' },
-        { command: 'status', description: 'Check the status of a payment (e.g. /status tx_123)' },
-        { command: 'help', description: 'Show available commands and usage' },
-      ]);
-
-      // Use polling for simplicity (use webhooks in production)
+      await this.registerCommands();
       await this.bot.launch();
       this.isRunning = true;
 
-      console.log('Telegram bot started successfully');
+      console.log('Telegram bot started (polling mode)');
 
-      // Enable graceful stop
       process.once('SIGINT', () => this.stop());
       process.once('SIGTERM', () => this.stop());
     } catch (error) {
@@ -75,13 +65,49 @@ export class TelegramService {
   }
 
   /**
+   * Set up webhook mode (for production)
+   */
+  async setWebhook(backendUrl: string): Promise<void> {
+    try {
+      await this.registerCommands();
+      const webhookUrl = `${backendUrl}/api/telegram/webhook`;
+      await this.bot.telegram.setWebhook(webhookUrl);
+      this.isRunning = true;
+      console.log(`Telegram bot webhook set: ${webhookUrl}`);
+    } catch (error) {
+      console.error('Failed to set Telegram webhook:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Express middleware for handling Telegram webhook updates
+   */
+  getWebhookCallback() {
+    return this.bot.webhookCallback('/api/telegram/webhook');
+  }
+
+  /**
+   * Register bot commands with Telegram
+   */
+  private async registerCommands(): Promise<void> {
+    await this.bot.telegram.setMyCommands([
+      { command: 'start', description: 'Start the bot and see how to receive USDC payment notifications across chains' },
+      { command: 'link', description: 'Link your ENS name (e.g. vitalik.eth) to receive payment alerts' },
+      { command: 'unlink', description: 'Disconnect your ENS from this Telegram account' },
+      { command: 'status', description: 'Check the status of a payment (e.g. /status tx_123)' },
+      { command: 'help', description: 'Show available commands and usage' },
+    ]);
+  }
+
+  /**
    * Stop the bot
    */
-  stop(): void {
+  async stop(): Promise<void> {
     if (!this.isRunning) return;
-    
+
     try {
-      this.bot.stop('SIGTERM');
+      await this.bot.telegram.deleteWebhook();
       this.isRunning = false;
       console.log('Telegram bot stopped');
     } catch (error) {
