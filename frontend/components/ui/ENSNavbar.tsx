@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   Navbar,
@@ -34,14 +35,12 @@ export function ENSNavbar({ className }: ENSNavbarProps) {
             href="/"
             className="relative z-20 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-white"
           >
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#a3e635] to-emerald-400 flex items-center justify-center shadow-lg shadow-[#a3e635]/30">
-              <span className="text-black font-black text-lg">E</span>
-            </div>
-            <span className="font-medium text-white">ENSRouter</span>
+            <Image src="/logo.png" alt="ENSRouter Logo" width={62} height={62} />
+            <span className="font-bold text-white">ENSRouter</span>
           </a>
 
           {/* Nav Items - Centered */}
-          <NavItems items={navLinks} />
+          <NavItems items={navLinks} className="text-white" />
 
           {/* Wallet Connect Button */}
           <ConnectButton />
@@ -55,9 +54,7 @@ export function ENSNavbar({ className }: ENSNavbarProps) {
               href="/"
               className="relative z-20 flex items-center space-x-2 px-2 py-1 text-sm font-normal text-white"
             >
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#a3e635] to-emerald-400 flex items-center justify-center shadow-lg shadow-[#a3e635]/30">
-                <span className="text-black font-black text-lg">E</span>
-              </div>
+              <Image src="/logo.png" alt="ENSRouter Logo" width={62} height={62} />
               <span className="font-medium text-white">ENSRouter</span>
             </a>
 
@@ -79,7 +76,7 @@ export function ENSNavbar({ className }: ENSNavbarProps) {
                 key={idx}
                 href={link.link}
                 onClick={() => setIsMobileMenuOpen(false)}
-                className="w-full text-left text-neutral-300 hover:text-white dark:text-neutral-300 dark:hover:text-white font-medium transition-colors"
+                className="w-full text-left text-white hover:text-[#a3e635] text-lg font-semibold py-2 px-4 rounded-lg hover:bg-white/10 transition-all"
               >
                 {link.name}
               </a>

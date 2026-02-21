@@ -1,5 +1,6 @@
 'use client'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import Dither from '@/components/Dither'
@@ -35,7 +36,7 @@ export default function LandingPage() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm mb-8">
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span className="text-xs font-medium text-white/70 tracking-widest uppercase">
-                Powered by ENS & Circle CCTP
+                Powered by ENS & LI.FI
               </span>
             </div>
             
@@ -141,8 +142,8 @@ export default function LandingPage() {
             {[
               "No gas tokens needed on destination chains",
               "Portable preferences across any app",
-              "Instant cross-chain bridging via Circle",
-              "Gasless token swaps via Across Protocol"
+              "Instant cross-chain bridging via LI.FI",
+              "Optimal token swaps with smart routing"
             ].map((text, i) => (
               <div 
                 key={i}
@@ -163,9 +164,12 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="py-8 px-4 bg-black border-t border-white/10">
         <div className="container mx-auto max-w-5xl flex flex-col md:flex-row justify-between items-center gap-4">
-          <span className="text-white/40 text-sm">
-            ChainRouter
-          </span>
+          <div className="flex items-center gap-2">
+            <Image src="/logo.png" alt="ENSRouter Logo" width={62} height={62} />
+            <span className="text-white/40 text-sm font-medium">
+              ENSRouter
+            </span>
+          </div>
           <p className="text-white/30 text-xs">
             Built for the ENS community
           </p>
